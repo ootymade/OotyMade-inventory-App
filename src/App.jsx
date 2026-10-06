@@ -23,6 +23,7 @@ import DirectOrderDetail from './screens/orders/DirectOrderDetail.jsx'
 import DailyOrders from './screens/daily/DailyOrders.jsx'
 import ShopifyOrderList from './screens/shopify/ShopifyOrderList.jsx'
 import ShopifyOrderDetail from './screens/shopify/ShopifyOrderDetail.jsx'
+import ShopifySkuMapping from './screens/shopify/ShopifySkuMapping.jsx'
 import { Spinner } from './components/ui.jsx'
 
 function AppShell() {
@@ -75,6 +76,7 @@ function AppShell() {
           <Route path="/daily-orders" element={<DailyOrders />} />
           <Route path="/shopify-orders" element={<ShopifyOrderList />} />
           <Route path="/shopify-orders/:id" element={<ShopifyOrderDetail />} />
+          <Route path="/shopify-sku-mapping" element={<ShopifySkuMapping />} />
         </Routes>
       </div>
       <BottomNav />

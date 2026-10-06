@@ -846,6 +846,39 @@ export async function refreshShopifyOrders() {
   return data
 }
 
+// Unmapped Shopify SKUs seen in synced orders (admin-only — the view
+// itself returns nothing for non-admins). Each needs an admin to pick the
+// matching catalog product before order items with that SKU resolve.
+export async function listUnmappedShopifySkus() {
+  const { data, error } = await supabase.from('shopify_unmapped_skus_view').select('*').order('order_item_count', { ascending: false })
+  must(error)
+  return data.map((row) => ({ sku: row.sku, sampleTitle: row.sample_title, orderItemCount: Number(row.order_item_count) }))
+}
+
+// Already-confirmed Shopify SKU -> product mappings, for review/correction.
+export async function listSkuMappings() {
+  const { data, error } = await supabase.from('shopify_sku_map').select('*').order('updated_at', { ascending: false })
+  must(error)
+  return data.map((row) => ({
+    shopifySku: row.shopify_sku,
+    productId: row.product_id,
+    quantityMultiplier: Number(row.quantity_multiplier),
+    updatedAt: row.updated_at,
+  }))
+}
+
+// Admin-confirms shopifySku -> productId (with an optional quantity
+// multiplier, e.g. a Shopify SKU that's really N catalog units). Re-resolves
+// every existing shopify_order_items row with that SKU in the same call.
+export async function saveSkuMapping({ shopifySku, productId, quantityMultiplier }) {
+  const { error } = await supabase.rpc('upsert_sku_mapping', {
+    p_shopify_sku: shopifySku,
+    p_product_id: productId,
+    p_quantity_multiplier: quantityMultiplier || 1,
+  })
+  must(error)
+}
+
 export async function getShopifySyncPing() {
   const { data, error } = await supabase.from('shopify_sync_ping').select('last_synced_at').eq('id', true).maybeSingle()
   must(error)

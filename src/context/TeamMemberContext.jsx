@@ -4,7 +4,12 @@ import { supabase } from '../db/supabaseClient.js'
 const TeamMemberContext = createContext(null)
 
 // member: undefined = looking up, null = signed in but no team_members row
-// (shouldn't happen for the 6 seeded accounts), otherwise { name, role }.
+// (shouldn't happen for the 6 seeded accounts), otherwise { name, role,
+// isAdmin }. `role` here is the descriptive title (e.g. "Director") used
+// for movement/invoice attribution, same as before individual logins —
+// it's sourced from team_members.title, NOT team_members.role, which is
+// the separate admin/staff access level (team_members.role) used only for
+// Shopify revenue masking server-side. isAdmin gates admin-only screens.
 export function TeamMemberProvider({ session, children }) {
   const [member, setMember] = useState(undefined)
 
@@ -13,11 +18,13 @@ export function TeamMemberProvider({ session, children }) {
     setMember(undefined)
     supabase
       .from('team_members')
-      .select('name, role')
+      .select('name, role, title')
       .eq('id', session.user.id)
       .maybeSingle()
       .then(({ data }) => {
-        if (!cancelled) setMember(data || null)
+        if (!cancelled) {
+          setMember(data ? { name: data.name, role: data.title, isAdmin: data.role === 'admin' } : null)
+        }
       })
     return () => {
       cancelled = true

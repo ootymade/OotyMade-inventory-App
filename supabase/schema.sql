@@ -166,7 +166,13 @@ create index if not exists daily_order_counts_date_idx on daily_order_counts(ord
 create table if not exists team_members (
   id uuid primary key references auth.users(id) on delete cascade,
   name text not null,
+  -- 'admin'/'staff' access level, used only for Shopify revenue masking
+  -- server-side — never shown to the user as a label.
   role text not null check (role in ('admin', 'staff')),
+  -- Descriptive title (e.g. "Director") used for movement/invoice
+  -- attribution display — same role the old shared-login name picker
+  -- showed, kept separate from the admin/staff access level above.
+  title text not null default '',
   created_at timestamptz not null default now()
 );
 
@@ -555,6 +561,79 @@ begin
     execute 'alter publication supabase_realtime add table public.shopify_sync_ping';
   end if;
 end $$;
+
+-- ---------------------------------------------------------------------------
+-- Shopify SKU mapping — Shopify's SKUs don't match this catalog's SKU
+-- format, so an admin has to confirm shopify_sku -> product_id by hand
+-- (quantity_multiplier covers a Shopify SKU that represents N catalog
+-- units). Reads/writes are admin-only; upsert_sku_mapping is the only way
+-- to write a mapping, and re-resolves every existing shopify_order_items
+-- row with that SKU in the same transaction.
+-- ---------------------------------------------------------------------------
+
+create table if not exists shopify_sku_map (
+  shopify_sku text primary key,
+  product_id uuid not null references products(id) on delete cascade,
+  quantity_multiplier numeric not null default 1,
+  created_by uuid references team_members(id) on delete set null,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+alter table shopify_sku_map enable row level security;
+
+drop policy if exists "admin reads sku map" on shopify_sku_map;
+create policy "admin reads sku map" on shopify_sku_map
+  for select using (exists (select 1 from team_members tm where tm.id = (select auth.uid()) and tm.role = 'admin'));
+-- No insert/update/delete policy — writes only via upsert_sku_mapping().
+
+revoke all on shopify_sku_map from anon, public, authenticated;
+grant select on shopify_sku_map to authenticated;
+
+create or replace function upsert_sku_mapping(
+  p_shopify_sku text,
+  p_product_id uuid,
+  p_quantity_multiplier numeric
+) returns void
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if not exists (select 1 from team_members where id = (select auth.uid()) and role = 'admin') then
+    raise exception 'Admin only';
+  end if;
+
+  insert into shopify_sku_map (shopify_sku, product_id, quantity_multiplier, created_by, updated_at)
+  values (p_shopify_sku, p_product_id, coalesce(p_quantity_multiplier, 1), (select auth.uid()), now())
+  on conflict (shopify_sku) do update
+    set product_id = excluded.product_id,
+        quantity_multiplier = excluded.quantity_multiplier,
+        updated_at = now();
+
+  update shopify_order_items
+    set product_id = p_product_id
+    where sku = p_shopify_sku;
+end;
+$$;
+
+revoke execute on function upsert_sku_mapping(text, uuid, numeric) from public, anon;
+grant execute on function upsert_sku_mapping(text, uuid, numeric) to authenticated;
+
+-- Distinct unmapped SKUs seen across synced order items, admin-only (the
+-- WHERE clause itself gates it — empty result for anyone who isn't admin).
+create or replace view shopify_unmapped_skus_view as
+select
+  oi.sku,
+  max(oi.title) as sample_title,
+  count(*) as order_item_count
+from shopify_order_items oi
+left join team_members tm on tm.id = (select auth.uid())
+where oi.product_id is null and oi.sku <> '' and tm.role = 'admin'
+group by oi.sku;
+
+revoke all on shopify_unmapped_skus_view from anon, public, authenticated;
+grant select on shopify_unmapped_skus_view to authenticated;
 
 -- ---------------------------------------------------------------------------
 -- Realtime: broadcast changes on every table the app reads, so all 5 phones

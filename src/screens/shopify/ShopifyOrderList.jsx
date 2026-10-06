@@ -2,9 +2,10 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { listShopifyOrders, refreshShopifyOrders } from '../../db/storage.js'
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
+import { useTeamMember } from '../../context/TeamMemberContext.jsx'
 import { PageHeader, Badge, Card, EmptyState, Button, Spinner } from '../../components/ui.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
-import { ShoppingBagIcon, SyncIcon } from '../../components/icons.jsx'
+import { ShoppingBagIcon, SyncIcon, EditIcon } from '../../components/icons.jsx'
 
 const REALTIME_TABLES = ['shopify_sync_ping']
 const POLL_INTERVAL_MS = 2 * 60 * 1000
@@ -38,6 +39,7 @@ function timeAgo(iso) {
 
 export default function ShopifyOrderList() {
   const { push } = useToast()
+  const { member } = useTeamMember()
   const [params, setParams] = useSearchParams()
   const status = params.get('status') || ''
   const [orders, setOrders] = useState(null)
@@ -87,9 +89,18 @@ export default function ShopifyOrderList() {
         title="Shopify Orders"
         subtitle={orders ? `${orders.length} order${orders.length === 1 ? '' : 's'}` : undefined}
         right={
-          <Button size="sm" className="!px-3" variant="ghost" onClick={() => refresh(false)} disabled={refreshing}>
-            {refreshing ? <Spinner className="h-4 w-4" /> : <SyncIcon className="h-5 w-5" />}
-          </Button>
+          <div className="flex items-center gap-1">
+            {member?.isAdmin && (
+              <Link to="/shopify-sku-mapping">
+                <Button size="sm" className="!px-3" variant="ghost" aria-label="Map SKUs">
+                  <EditIcon className="h-5 w-5" />
+                </Button>
+              </Link>
+            )}
+            <Button size="sm" className="!px-3" variant="ghost" onClick={() => refresh(false)} disabled={refreshing}>
+              {refreshing ? <Spinner className="h-4 w-4" /> : <SyncIcon className="h-5 w-5" />}
+            </Button>
+          </div>
         }
       />
 

@@ -159,11 +159,11 @@ export async function ensureWebhooks(supabase: SupabaseClient) {
 }
 
 // Maps one Shopify Order node (GraphQL shape above) into shopify_orders +
-// shopify_order_items, matched to the existing catalog by exact SKU.
-// Idempotent on shopify_order_id, so re-delivering the same webhook or
-// re-running a backfill never duplicates a row. SKUs with no matching
-// product are left unmapped (product_id null) rather than failing the sync
-// — Shopify and this app's catalog don't use the same SKU format yet.
+// shopify_order_items, matched to the existing catalog via shopify_sku_map
+// (admin-confirmed) or, failing that, an exact SKU match. Idempotent on
+// shopify_order_id, so re-delivering the same webhook or re-running a
+// backfill never duplicates a row. SKUs with no mapping are left unmapped
+// (product_id null) rather than failing the sync.
 export async function upsertOrder(supabase: SupabaseClient, node: any): Promise<string> {
   const row = {
     shopify_order_id: node.id,
@@ -200,8 +200,16 @@ export async function upsertOrder(supabase: SupabaseClient, node: any): Promise<
   for (const li of items) {
     let productId: string | null = null
     if (li.sku) {
-      const { data: product } = await supabase.from('products').select('id').eq('sku', li.sku).maybeSingle()
-      productId = product?.id ?? null
+      // An admin-confirmed mapping always wins (Shopify and this catalog
+      // don't share a SKU format) — fall back to an exact SKU match only
+      // if the two ever happen to line up for a given product.
+      const { data: mapping } = await supabase.from('shopify_sku_map').select('product_id').eq('shopify_sku', li.sku).maybeSingle()
+      if (mapping) {
+        productId = mapping.product_id
+      } else {
+        const { data: product } = await supabase.from('products').select('id').eq('sku', li.sku).maybeSingle()
+        productId = product?.id ?? null
+      }
     }
     const { error: itemError } = await supabase.from('shopify_order_items').upsert(
       {
