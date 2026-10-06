@@ -146,6 +146,77 @@ export const GET_ORDER_QUERY = `
   }
 `
 
+// "#16600" -> 16600. Returns null for anything that doesn't look like a
+// plain numbered order ("#16600-A", draft orders, etc.) so the numeric
+// cutoff check below always fails closed (skips) rather than guessing.
+export function parseOrderNumber(orderNumber: string): number | null {
+  const match = /^#(\d+)$/.exec(orderNumber ?? '')
+  return match ? parseInt(match[1], 10) : null
+}
+
+export type SyncSettings = {
+  firstOrderNumber: number
+  cutoffDate: string | null
+}
+
+// Orders before this number are out of scope for this integration (it only
+// started partway through the store's order history) — both the backfill
+// sync and the webhook must ignore them. The numeric check in upsertOrder is
+// authoritative; cutoffDate is only ever used as a Shopify-side query filter
+// to avoid paging through years of pre-cutoff orders, never as the decision
+// itself (Shopify's `name:` search can't do numeric comparison).
+export async function getSyncSettings(supabase: SupabaseClient): Promise<SyncSettings> {
+  const { data } = await supabase
+    .from('shopify_settings')
+    .select('first_order_number, first_order_cutoff_date, resolved_for_number')
+    .eq('id', true)
+    .maybeSingle()
+
+  const firstOrderNumber = data?.first_order_number ?? 16600
+
+  if (data?.first_order_cutoff_date && data.resolved_for_number === firstOrderNumber) {
+    return { firstOrderNumber, cutoffDate: data.first_order_cutoff_date }
+  }
+
+  // Cache miss (first run, or the admin just changed the number): look up
+  // that exact order's creation date once and cache it. If it can't be
+  // found (e.g. the number hasn't been used yet), leave cutoffDate null —
+  // the sync still works correctly, just without the efficiency filter.
+  try {
+    const result = await shopifyGraphql(
+      supabase,
+      `query FindOrderByName($query: String!) {
+        orders(first: 1, query: $query) { edges { node { createdAt } } }
+      }`,
+      { query: `name:#${firstOrderNumber}` },
+    )
+    const cutoffDate = result.orders.edges[0]?.node.createdAt ?? null
+    if (cutoffDate) {
+      await supabase
+        .from('shopify_settings')
+        .update({ first_order_cutoff_date: cutoffDate, resolved_for_number: firstOrderNumber })
+        .eq('id', true)
+    }
+    return { firstOrderNumber, cutoffDate }
+  } catch {
+    // Resolving the cutoff date is purely an efficiency measure — if it
+    // fails for any reason (including a bad domain), the numeric check
+    // still enforces the cutoff correctly, so don't let this fail the sync.
+    return { firstOrderNumber, cutoffDate: null }
+  }
+}
+
+// What a newly-created row's workflow should start at, based on the
+// fulfillment state Shopify already reports (e.g. a backfilled order that
+// was fulfilled before this integration ever saw it shouldn't start at
+// "new" and make someone re-pack it). Never applied to an existing row —
+// staff-driven progress after that is never overwritten by a sync.
+export function initialWorkflowStatus(fulfillmentStatus: string): string {
+  if (fulfillmentStatus === 'FULFILLED') return 'shipped'
+  if (fulfillmentStatus === 'PARTIALLY_FULFILLED') return 'packing'
+  return 'new'
+}
+
 const WEBHOOK_TOPICS = ['ORDERS_CREATE', 'ORDERS_UPDATED']
 
 // Idempotently makes sure our orders/create + orders/updated webhooks are
@@ -197,8 +268,18 @@ export async function ensureWebhooks(supabase: SupabaseClient): Promise<string[]
 // shopify_order_id, so re-delivering the same webhook or re-running a
 // backfill never duplicates a row. SKUs with no mapping are left unmapped
 // (product_id null) rather than failing the sync. Returns whether this was
-// a new row (for the admin-visible sync-result counts).
-export async function upsertOrder(supabase: SupabaseClient, node: any): Promise<{ id: string; created: boolean }> {
+// a new row (for the admin-visible sync-result counts), or skipped: true if
+// the order is below minOrderNumber and was left untouched entirely.
+export async function upsertOrder(
+  supabase: SupabaseClient,
+  node: any,
+  minOrderNumber: number,
+): Promise<{ id: string; created: boolean } | { skipped: true }> {
+  const orderNumber = parseOrderNumber(node.name ?? '')
+  if (orderNumber !== null && orderNumber < minOrderNumber) {
+    return { skipped: true }
+  }
+
   const { data: existing } = await supabase
     .from('shopify_orders')
     .select('id')
@@ -206,7 +287,7 @@ export async function upsertOrder(supabase: SupabaseClient, node: any): Promise<
     .maybeSingle()
   const created = !existing
 
-  const row = {
+  const row: Record<string, unknown> = {
     shopify_order_id: node.id,
     order_number: node.name ?? '',
     shopify_created_at: node.createdAt,
@@ -228,6 +309,11 @@ export async function upsertOrder(supabase: SupabaseClient, node: any): Promise<
     raw: node,
     synced_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+  }
+  // Only set on first creation — an update must never touch workflow_status,
+  // or a sync/webhook would stomp on whatever progress staff already made.
+  if (created) {
+    row.workflow_status = initialWorkflowStatus(node.displayFulfillmentStatus ?? '')
   }
 
   const { data: order, error } = await supabase

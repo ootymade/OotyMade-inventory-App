@@ -1,9 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { listShopifyOrders, refreshShopifyOrders } from '../../db/storage.js'
+import {
+  listShopifyOrders,
+  refreshShopifyOrders,
+  getShopifySyncSettings,
+  saveShopifyFirstOrderNumber,
+} from '../../db/storage.js'
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
-import { PageHeader, Badge, Card, EmptyState, Button, Spinner } from '../../components/ui.jsx'
+import { PageHeader, Badge, Card, EmptyState, Button, Spinner, Input } from '../../components/ui.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
 import { ShoppingBagIcon, SyncIcon, EditIcon } from '../../components/icons.jsx'
 
@@ -45,9 +50,13 @@ export default function ShopifyOrderList() {
   const [orders, setOrders] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
   // Admin-only diagnostic — never shown to Staff. Holds the last sync
-  // result ({ ok: true, fetched, created, updated, webhooksRegistered }) or
-  // ({ ok: false, error }); never contains a token or secret.
+  // result ({ ok, partial, fetched, created, updated, skipped,
+  // webhooksRegistered, error? }); never contains a token or secret.
   const [lastResult, setLastResult] = useState(null)
+  const [settings, setSettings] = useState(null)
+  const [showSettings, setShowSettings] = useState(false)
+  const [firstOrderInput, setFirstOrderInput] = useState('')
+  const [savingSettings, setSavingSettings] = useState(false)
 
   const load = useCallback(() => {
     listShopifyOrders({ workflowStatus: status }).then(setOrders)
@@ -59,12 +68,17 @@ export default function ShopifyOrderList() {
 
   useRealtimeRefresh(REALTIME_TABLES, load)
 
+  useEffect(() => {
+    if (member?.isAdmin) getShopifySyncSettings().then(setSettings)
+  }, [member?.isAdmin])
+
   const refresh = useCallback(
     async (silent = false) => {
       setRefreshing(true)
       try {
         const result = await refreshShopifyOrders()
         setLastResult(result)
+        if (!result.ok && !silent) push(result.error, { tone: 'error' })
         load()
       } catch (err) {
         setLastResult({ ok: false, error: err.message })
@@ -75,6 +89,24 @@ export default function ShopifyOrderList() {
     },
     [load, push],
   )
+
+  const saveSettings = async () => {
+    const n = parseInt(firstOrderInput, 10)
+    if (!n || n < 1) {
+      push('Enter a valid order number', { tone: 'error' })
+      return
+    }
+    setSavingSettings(true)
+    try {
+      await saveShopifyFirstOrderNumber(n)
+      setSettings({ firstOrderNumber: n })
+      push(`Future syncs will ignore orders before #${n}`, { tone: 'success' })
+    } catch (err) {
+      push(err.message, { tone: 'error' })
+    } finally {
+      setSavingSettings(false)
+    }
+  }
 
   // Manual refresh once on open, then a background poll as a fallback for
   // any missed webhook — both call the same read-only sync function.
@@ -110,6 +142,41 @@ export default function ShopifyOrderList() {
         }
       />
 
+      {member?.isAdmin && (
+        <div className="px-4 pt-2">
+          <button
+            onClick={() => {
+              setShowSettings((s) => !s)
+              setFirstOrderInput(String(settings?.firstOrderNumber ?? ''))
+            }}
+            className="text-xs font-semibold text-brand-600"
+          >
+            {showSettings ? 'Hide sync settings' : 'Sync settings'}
+          </button>
+          {showSettings && (
+            <Card className="mt-2 !py-3 text-sm">
+              <p className="text-xs font-semibold text-slate-500">First order number to sync</p>
+              <p className="mt-1 text-xs text-slate-400">
+                Orders before this number are ignored by Refresh and the webhook. Format: #16600.
+              </p>
+              <div className="mt-2 flex gap-2">
+                <Input
+                  type="number"
+                  min="1"
+                  value={firstOrderInput}
+                  onChange={(e) => setFirstOrderInput(e.target.value)}
+                  className="flex-1"
+                />
+                <Button size="sm" onClick={saveSettings} disabled={savingSettings}>
+                  {savingSettings ? <Spinner className="h-4 w-4" /> : 'Save'}
+                </Button>
+              </div>
+              {settings && <p className="mt-2 text-xs text-slate-400">Currently: #{settings.firstOrderNumber}</p>}
+            </Card>
+          )}
+        </div>
+      )}
+
       <div className="flex gap-2 overflow-x-auto px-4 pb-1 pt-3">
         {STATUS_TABS.map((tab) => (
           <button
@@ -131,31 +198,35 @@ export default function ShopifyOrderList() {
 
       {member?.isAdmin && lastResult && (
         <div className="px-4 pt-3">
-          {lastResult.ok ? (
-            <Card className="!py-3 text-sm">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold text-ok-600">Sync succeeded</p>
-                <button onClick={() => setLastResult(null)} className="text-xs text-slate-400">
-                  Dismiss
-                </button>
-              </div>
+          <Card className="!py-3 text-sm">
+            <div className="flex items-center justify-between">
+              <p className={`font-semibold ${lastResult.ok ? (lastResult.partial ? 'text-warn-600' : 'text-ok-600') : 'text-danger-600'}`}>
+                {lastResult.ok ? (lastResult.partial ? 'Sync partially completed' : 'Sync succeeded') : 'Sync failed'}
+              </p>
+              <button onClick={() => setLastResult(null)} className="text-xs text-slate-400">
+                Dismiss
+              </button>
+            </div>
+            {!lastResult.ok && <p className="mt-1 text-xs text-slate-500">{lastResult.error}</p>}
+            {lastResult.fetched != null && (
               <p className="mt-1 text-xs text-slate-500">
                 {lastResult.fetched} fetched · {lastResult.created} created · {lastResult.updated} updated
-                {lastResult.webhooksRegistered?.length > 0 &&
-                  ` · webhooks registered: ${lastResult.webhooksRegistered.join(', ')}`}
+                {lastResult.skipped > 0 && ` · ${lastResult.skipped} skipped (before cutoff)`}
               </p>
-            </Card>
-          ) : (
-            <Card className="!py-3 text-sm">
-              <div className="flex items-center justify-between">
-                <p className="font-semibold text-danger-600">Sync failed</p>
-                <button onClick={() => setLastResult(null)} className="text-xs text-slate-400">
-                  Dismiss
-                </button>
-              </div>
-              <p className="mt-1 text-xs text-slate-500">{lastResult.error}</p>
-            </Card>
-          )}
+            )}
+            {lastResult.webhooksRegistered && (
+              <p className="mt-1 text-xs text-slate-400">
+                {lastResult.webhooksRegistered.length > 0
+                  ? `Webhooks newly registered: ${lastResult.webhooksRegistered.join(', ')}`
+                  : 'Webhooks already up to date'}
+              </p>
+            )}
+            {lastResult.partial && (
+              <p className="mt-1 text-xs text-warn-600">
+                Stopped early to stay under the time limit — press Refresh again to continue.
+              </p>
+            )}
+          </Card>
         </div>
       )}
 
@@ -189,6 +260,11 @@ export default function ShopifyOrderList() {
                     <Badge tone={FULFILLMENT_TONE[o.fulfillmentStatus] || 'slate'}>
                       {(o.fulfillmentStatus || '').replace(/_/g, ' ').toLowerCase() || 'unknown'}
                     </Badge>
+                    {(o.cancelledAt || (o.financialStatus && !['PAID', 'AUTHORIZED', 'PARTIALLY_REFUNDED'].includes(o.financialStatus))) && (
+                      <p className="mt-1 text-[11px] font-semibold text-danger-600">
+                        {o.cancelledAt ? 'Cancelled' : o.financialStatus.replace(/_/g, ' ').toLowerCase()}
+                      </p>
+                    )}
                     {o.totalPrice != null && (
                       <p className="mt-1 text-[11px] text-slate-400">
                         {new Intl.NumberFormat(undefined, { style: 'currency', currency: o.currency || 'INR', maximumFractionDigits: 0 }).format(o.totalPrice)}

@@ -74,10 +74,8 @@ export default function ShopifyOrderDetail() {
         </div>
         <p className="text-xs text-slate-400">Placed {formatDate(order.createdAt)}</p>
         {order.cancelledAt && <p className="text-xs font-semibold text-danger-600">Cancelled {formatDate(order.cancelledAt)}</p>}
-        {order.financialStatus && (
-          <p className="text-xs font-semibold text-warn-600">
-            {['PAID', 'PARTIALLY_REFUNDED'].includes(order.financialStatus) ? '' : `Payment: ${order.financialStatus.toLowerCase()}`}
-          </p>
+        {order.financialStatus && !['PAID', 'AUTHORIZED', 'PARTIALLY_REFUNDED'].includes(order.financialStatus) && (
+          <p className="text-xs font-semibold text-warn-600">Payment: {order.financialStatus.toLowerCase()}</p>
         )}
       </Card>
 

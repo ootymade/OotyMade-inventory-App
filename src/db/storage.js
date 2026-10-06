@@ -840,23 +840,47 @@ export async function getShopifyOrderWithItems(id) {
 // refresh). Uses the signed-in team member's own session — the function
 // requires a valid Supabase session and does all the actual Shopify calls
 // server-side.
-// Returns { ok: true, fetched, created, updated, webhooksRegistered } on
-// success. On failure, throws with the Edge Function's own specific error
-// message (e.g. a misconfigured Shopify domain) rather than the generic
-// HTTP-level one supabase-js gives for a non-2xx response.
+//
+// Always resolves (never throws) with a result the caller can render
+// directly: { ok: true, partial, fetched, created, updated, skipped,
+// webhooksRegistered } on success or a partial stop, or { ok: false, error,
+// ...same counts } when the function ran but failed partway through. The
+// Edge Function always returns real JSON on every path it controls, but a
+// platform-level failure (e.g. the function being killed for running too
+// long) has no body of ours to read, so that case is turned into its own
+// specific message here instead of supabase-js's generic one.
 export async function refreshShopifyOrders() {
   const { data, error } = await supabase.functions.invoke('shopify-sync-orders', { method: 'POST' })
-  if (error) {
-    let message = error.message || 'Refresh failed'
-    try {
-      const body = await error.context.json()
-      if (body?.error) message = body.error
-    } catch {
-      // Keep the generic message if the body isn't readable/JSON.
-    }
-    throw new Error(message)
+  if (!error) return data
+
+  let body = null
+  try {
+    body = await error.context.json()
+  } catch {
+    // Not JSON — the function never got to produce its own response body.
   }
-  return data
+  if (body) return body
+
+  const status = error.context?.status
+  const message =
+    status === 546 || status === 504
+      ? 'Sync timed out partway through. Some orders may already be imported — press Refresh to continue.'
+      : error.message || 'Refresh failed'
+  return { ok: false, error: message }
+}
+
+export async function getShopifySyncSettings() {
+  const { data, error } = await supabase.from('shopify_settings').select('first_order_number').eq('id', true).maybeSingle()
+  must(error)
+  return { firstOrderNumber: data?.first_order_number ?? 16600 }
+}
+
+// Admin-only. Orders below this number are ignored by both the sync and the
+// webhook from the next run onward — this only changes what future syncs
+// touch, it never deletes anything already imported.
+export async function saveShopifyFirstOrderNumber(firstOrderNumber) {
+  const { error } = await supabase.rpc('update_shopify_first_order_number', { p_number: firstOrderNumber })
+  must(error)
 }
 
 // Unmapped Shopify SKUs seen in synced orders (admin-only — the view

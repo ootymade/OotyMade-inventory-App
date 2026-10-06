@@ -9,7 +9,7 @@
 // HMAC instead.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
-import { adminClient, shopifyGraphql, upsertOrder, GET_ORDER_QUERY } from '../_shared/shopify.ts'
+import { adminClient, shopifyGraphql, upsertOrder, getSyncSettings, GET_ORDER_QUERY } from '../_shared/shopify.ts'
 
 async function verifyHmac(rawBody: string, header: string | null, secret: string): Promise<boolean> {
   if (!header) return false
@@ -54,9 +54,10 @@ Deno.serve(async (req: Request) => {
     }
 
     const supabase = adminClient()
+    const { firstOrderNumber } = await getSyncSettings(supabase)
     const data = await shopifyGraphql(supabase, GET_ORDER_QUERY, { id: orderGid })
     if (data.order) {
-      await upsertOrder(supabase, data.order)
+      await upsertOrder(supabase, data.order, firstOrderNumber)
     }
 
     return new Response(JSON.stringify({ ok: true }), { headers: { 'Content-Type': 'application/json' } })
