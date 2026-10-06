@@ -874,6 +874,24 @@ export async function refreshShopifyOrders() {
   return { ok: false, error: message }
 }
 
+// One-off, read-only investigation: fetches live Shopify payment
+// transactions for every synced order and reports financial-status/gateway
+// breakdowns, so the payment_hold rule can be set from evidence. Writes
+// nothing. Admin-only (enforced inside the function, not just by the UI).
+export async function runShopifyPaymentDiagnostics() {
+  const { data, error } = await supabase.functions.invoke('shopify-payment-diagnostics', { method: 'POST' })
+  if (!error) return data
+
+  let body = null
+  try {
+    body = await error.context.json()
+  } catch {
+    // Not JSON.
+  }
+  if (body) return body
+  return { ok: false, error: error.message || 'Diagnostics failed' }
+}
+
 export async function getShopifySyncSettings() {
   const { data, error } = await supabase.from('shopify_settings').select('first_order_number').eq('id', true).maybeSingle()
   must(error)

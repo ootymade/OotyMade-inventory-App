@@ -5,6 +5,7 @@ import {
   refreshShopifyOrders,
   getShopifySyncSettings,
   saveShopifyFirstOrderNumber,
+  runShopifyPaymentDiagnostics,
 } from '../../db/storage.js'
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
@@ -57,6 +58,11 @@ export default function ShopifyOrderList() {
   const [showSettings, setShowSettings] = useState(false)
   const [firstOrderInput, setFirstOrderInput] = useState('')
   const [savingSettings, setSavingSettings] = useState(false)
+  // One-off investigation (read-only against Shopify, writes nothing) to
+  // settle what payment_hold should actually check — remove this button
+  // and state once that's decided.
+  const [diagResult, setDiagResult] = useState(null)
+  const [runningDiag, setRunningDiag] = useState(false)
 
   const load = useCallback(() => {
     listShopifyOrders({ workflowStatus: status }).then(setOrders)
@@ -89,6 +95,20 @@ export default function ShopifyOrderList() {
     },
     [load, push],
   )
+
+  const runDiagnostics = async () => {
+    setRunningDiag(true)
+    try {
+      const result = await runShopifyPaymentDiagnostics()
+      setDiagResult(result)
+      if (!result.ok) push(result.error, { tone: 'error' })
+    } catch (err) {
+      setDiagResult({ ok: false, error: err.message })
+      push(err.message, { tone: 'error' })
+    } finally {
+      setRunningDiag(false)
+    }
+  }
 
   const saveSettings = async () => {
     const n = parseInt(firstOrderInput, 10)
@@ -174,6 +194,43 @@ export default function ShopifyOrderList() {
               {settings && <p className="mt-2 text-xs text-slate-400">Currently: #{settings.firstOrderNumber}</p>}
             </Card>
           )}
+
+          <div className="mt-2">
+            <Button size="sm" variant="ghost" className="!px-0 text-xs" onClick={runDiagnostics} disabled={runningDiag}>
+              {runningDiag ? <Spinner className="h-4 w-4" /> : 'Run payment diagnostics (read-only)'}
+            </Button>
+            {diagResult && (
+              <Card className="mt-2 !py-3 text-xs">
+                <div className="flex items-center justify-between">
+                  <p className={`font-semibold ${diagResult.ok ? 'text-ok-600' : 'text-danger-600'}`}>
+                    {diagResult.ok ? 'Diagnostics complete' : 'Diagnostics failed'}
+                  </p>
+                  <button onClick={() => setDiagResult(null)} className="text-slate-400">
+                    Dismiss
+                  </button>
+                </div>
+                {diagResult.ok ? (
+                  <div className="mt-1 space-y-1 text-slate-500">
+                    <p>
+                      Checked {diagResult.checked} of {diagResult.totalOrders} orders ({diagResult.failed} failed to fetch)
+                    </p>
+                    <p>By financial status: {JSON.stringify(diagResult.byFinancialStatus)}</p>
+                    <p>By gateway: {JSON.stringify(diagResult.byGateway)}</p>
+                    <p>
+                      AUTHORIZED: {diagResult.authorizedCount} total — {diagResult.authorizedCaptured} already captured,{' '}
+                      {diagResult.authorizedNotCaptured} authorization-only
+                    </p>
+                    <p>
+                      FULFILLED while still AUTHORIZED: {diagResult.fulfilledStillAuthorizedCount} total —{' '}
+                      {diagResult.fulfilledStillAuthorizedCaptured} of those have a capture
+                    </p>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-slate-500">{diagResult.error}</p>
+                )}
+              </Card>
+            )}
+          </div>
         </div>
       )}
 
