@@ -7,7 +7,7 @@
 // on), so only signed-in team members can trigger it.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
-import { adminClient, shopifyGraphql, upsertOrder, ensureWebhooks, ORDER_FIELDS } from '../_shared/shopify.ts'
+import { adminClient, shopifyGraphql, upsertOrder, ensureWebhooks, ORDER_FIELDS, InvalidShopifyDomainError } from '../_shared/shopify.ts'
 
 const QUERY = `
   query RecentOrders($first: Int!, $after: String) {
@@ -48,7 +48,10 @@ Deno.serve(async (req: Request) => {
     })
   } catch (err) {
     console.error('shopify-sync-orders failed:', err instanceof Error ? err.message : err)
-    return new Response(JSON.stringify({ ok: false, error: 'Sync failed' }), {
+    // The domain-format error names a non-sensitive config value, so it's
+    // safe (and useful) to return verbatim — every other error stays generic.
+    const message = err instanceof InvalidShopifyDomainError ? err.message : 'Sync failed'
+    return new Response(JSON.stringify({ ok: false, error: message }), {
       status: 500,
       headers: { 'Content-Type': 'application/json' },
     })

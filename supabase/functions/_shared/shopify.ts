@@ -8,6 +8,23 @@ import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 
 export const API_VERSION = '2026-10'
 
+const DOMAIN_PATTERN = /^[a-z0-9-]+\.myshopify\.com$/
+
+// A misconfigured domain (e.g. truncated to just ".myshopify.com") must
+// fail loudly and specifically here — it's not sensitive, so the message
+// is safe to return to the caller, unlike any other error in this module.
+export class InvalidShopifyDomainError extends Error {}
+
+export function assertValidShopifyDomain(domain: string | undefined): string {
+  if (!domain || !DOMAIN_PATTERN.test(domain)) {
+    throw new InvalidShopifyDomainError(
+      `SHOPIFY_STORE_DOMAIN is not set correctly (current value: "${domain ?? ''}"). ` +
+        `Expected a bare shop domain like "yourstorename.myshopify.com".`,
+    )
+  }
+  return domain
+}
+
 export function adminClient(): SupabaseClient {
   return createClient(
     Deno.env.get('SUPABASE_URL')!,
@@ -37,7 +54,7 @@ async function fetchNewToken(domain: string, clientId: string, clientSecret: str
 // more than 2 minutes left, otherwise fetching and caching a fresh one.
 // client_credentials tokens are valid ~24h. The token is never logged.
 export async function getAccessToken(supabase: SupabaseClient): Promise<string> {
-  const domain = Deno.env.get('SHOPIFY_STORE_DOMAIN')!
+  const domain = assertValidShopifyDomain(Deno.env.get('SHOPIFY_STORE_DOMAIN'))
   const clientId = Deno.env.get('SHOPIFY_CLIENT_ID')!
   const clientSecret = Deno.env.get('SHOPIFY_CLIENT_SECRET')!
 
@@ -60,7 +77,7 @@ export async function getAccessToken(supabase: SupabaseClient): Promise<string> 
 }
 
 export async function shopifyGraphql(supabase: SupabaseClient, query: string, variables?: Record<string, unknown>) {
-  const domain = Deno.env.get('SHOPIFY_STORE_DOMAIN')!
+  const domain = assertValidShopifyDomain(Deno.env.get('SHOPIFY_STORE_DOMAIN'))
   const token = await getAccessToken(supabase)
 
   const res = await fetch(`https://${domain}/admin/api/${API_VERSION}/graphql.json`, {
