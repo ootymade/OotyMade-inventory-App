@@ -17,6 +17,7 @@ import SupplierList from './screens/suppliers/SupplierList.jsx'
 import SupplierDetail from './screens/suppliers/SupplierDetail.jsx'
 import SupplierForm from './screens/suppliers/SupplierForm.jsx'
 import DataSync from './screens/settings/DataSync.jsx'
+import ChangePassword from './screens/settings/ChangePassword.jsx'
 import DirectOrderList from './screens/orders/DirectOrderList.jsx'
 import DirectOrderForm from './screens/orders/DirectOrderForm.jsx'
 import DirectOrderDetail from './screens/orders/DirectOrderDetail.jsx'
@@ -70,6 +71,7 @@ function AppShell() {
           <Route path="/suppliers/:id" element={<SupplierDetail />} />
           <Route path="/suppliers/:id/edit" element={<SupplierForm />} />
           <Route path="/data-sync" element={<DataSync />} />
+          <Route path="/change-password" element={<ChangePassword />} />
           <Route path="/direct-orders" element={<DirectOrderList />} />
           <Route path="/direct-orders/new" element={<DirectOrderForm />} />
           <Route path="/direct-orders/:id" element={<DirectOrderDetail />} />

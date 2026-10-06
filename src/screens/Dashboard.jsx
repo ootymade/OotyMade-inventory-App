@@ -284,6 +284,8 @@ export default function Dashboard() {
         </Link>
         <span>·</span>
         <Link to="/data-sync">Export data / bulk import</Link>
+        <span>·</span>
+        <Link to="/change-password">Change password</Link>
       </div>
     </div>
   )
