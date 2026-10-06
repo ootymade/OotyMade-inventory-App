@@ -8,6 +8,17 @@ import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2'
 
 export const API_VERSION = '2026-10'
 
+// shopify-sync-orders is called directly from the browser (ootymade.github.io),
+// a different origin than the Supabase project, so every response — including
+// the preflight OPTIONS and every error path — needs these headers or the
+// browser blocks the request before supabase-js ever sees a real HTTP status.
+// shopify-webhook doesn't need this: Shopify calls it server-to-server.
+export const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+}
+
 const DOMAIN_PATTERN = /^[a-z0-9-]+\.myshopify\.com$/
 
 // A misconfigured domain (e.g. truncated to just ".myshopify.com") must

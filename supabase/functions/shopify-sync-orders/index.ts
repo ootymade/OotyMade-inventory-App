@@ -7,7 +7,7 @@
 // on), so only signed-in team members can trigger it.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
-import { adminClient, shopifyGraphql, upsertOrder, ensureWebhooks, ORDER_FIELDS, InvalidShopifyDomainError } from '../_shared/shopify.ts'
+import { adminClient, shopifyGraphql, upsertOrder, ensureWebhooks, ORDER_FIELDS, InvalidShopifyDomainError, CORS_HEADERS } from '../_shared/shopify.ts'
 
 const QUERY = `
   query RecentOrders($first: Int!, $after: String) {
@@ -19,8 +19,18 @@ const QUERY = `
 `
 
 Deno.serve(async (req: Request) => {
+  // The browser sends this before the real POST (different origin, custom
+  // headers) and never attaches auth to it, so it must be answered here,
+  // before anything else, with no auth check.
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: CORS_HEADERS })
+  }
+
   if (req.method !== 'POST') {
-    return new Response(JSON.stringify({ error: 'Use POST' }), { status: 405 })
+    return new Response(JSON.stringify({ error: 'Use POST' }), {
+      status: 405,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    })
   }
 
   try {
@@ -48,7 +58,7 @@ Deno.serve(async (req: Request) => {
     }
 
     return new Response(JSON.stringify({ ok: true, fetched, created, updated, webhooksRegistered }), {
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
     })
   } catch (err) {
     console.error('shopify-sync-orders failed:', err instanceof Error ? err.message : err)
@@ -57,7 +67,7 @@ Deno.serve(async (req: Request) => {
     const message = err instanceof InvalidShopifyDomainError ? err.message : 'Sync failed'
     return new Response(JSON.stringify({ ok: false, error: message }), {
       status: 500,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
     })
   }
 })
