@@ -25,8 +25,10 @@ Deno.serve(async (req: Request) => {
 
   try {
     const supabase = adminClient()
-    await ensureWebhooks(supabase)
-    let synced = 0
+    const webhooksRegistered = await ensureWebhooks(supabase)
+    let fetched = 0
+    let created = 0
+    let updated = 0
     let after: string | null = null
     // One page (50) is enough for a day-to-day poll/manual refresh; a cold
     // backfill on a quiet store like this one finishes within a few pages.
@@ -36,14 +38,16 @@ Deno.serve(async (req: Request) => {
       const data = await shopifyGraphql(supabase, QUERY, { first: 50, after })
       const edges = data.orders.edges as any[]
       for (const edge of edges) {
-        await upsertOrder(supabase, edge.node)
-        synced++
+        const result = await upsertOrder(supabase, edge.node)
+        fetched++
+        if (result.created) created++
+        else updated++
       }
       if (!data.orders.pageInfo.hasNextPage) break
       after = data.orders.pageInfo.endCursor
     }
 
-    return new Response(JSON.stringify({ ok: true, synced }), {
+    return new Response(JSON.stringify({ ok: true, fetched, created, updated, webhooksRegistered }), {
       headers: { 'Content-Type': 'application/json' },
     })
   } catch (err) {

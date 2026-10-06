@@ -840,9 +840,22 @@ export async function getShopifyOrderWithItems(id) {
 // refresh). Uses the signed-in team member's own session — the function
 // requires a valid Supabase session and does all the actual Shopify calls
 // server-side.
+// Returns { ok: true, fetched, created, updated, webhooksRegistered } on
+// success. On failure, throws with the Edge Function's own specific error
+// message (e.g. a misconfigured Shopify domain) rather than the generic
+// HTTP-level one supabase-js gives for a non-2xx response.
 export async function refreshShopifyOrders() {
   const { data, error } = await supabase.functions.invoke('shopify-sync-orders', { method: 'POST' })
-  if (error) throw new Error(error.message || 'Refresh failed')
+  if (error) {
+    let message = error.message || 'Refresh failed'
+    try {
+      const body = await error.context.json()
+      if (body?.error) message = body.error
+    } catch {
+      // Keep the generic message if the body isn't readable/JSON.
+    }
+    throw new Error(message)
+  }
   return data
 }
 

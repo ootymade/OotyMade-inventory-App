@@ -44,6 +44,10 @@ export default function ShopifyOrderList() {
   const status = params.get('status') || ''
   const [orders, setOrders] = useState(null)
   const [refreshing, setRefreshing] = useState(false)
+  // Admin-only diagnostic — never shown to Staff. Holds the last sync
+  // result ({ ok: true, fetched, created, updated, webhooksRegistered }) or
+  // ({ ok: false, error }); never contains a token or secret.
+  const [lastResult, setLastResult] = useState(null)
 
   const load = useCallback(() => {
     listShopifyOrders({ workflowStatus: status }).then(setOrders)
@@ -59,9 +63,11 @@ export default function ShopifyOrderList() {
     async (silent = false) => {
       setRefreshing(true)
       try {
-        await refreshShopifyOrders()
+        const result = await refreshShopifyOrders()
+        setLastResult(result)
         load()
       } catch (err) {
+        setLastResult({ ok: false, error: err.message })
         if (!silent) push(err.message, { tone: 'error' })
       } finally {
         setRefreshing(false)
@@ -122,6 +128,36 @@ export default function ShopifyOrderList() {
           </button>
         ))}
       </div>
+
+      {member?.isAdmin && lastResult && (
+        <div className="px-4 pt-3">
+          {lastResult.ok ? (
+            <Card className="!py-3 text-sm">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-ok-600">Sync succeeded</p>
+                <button onClick={() => setLastResult(null)} className="text-xs text-slate-400">
+                  Dismiss
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">
+                {lastResult.fetched} fetched · {lastResult.created} created · {lastResult.updated} updated
+                {lastResult.webhooksRegistered?.length > 0 &&
+                  ` · webhooks registered: ${lastResult.webhooksRegistered.join(', ')}`}
+              </p>
+            </Card>
+          ) : (
+            <Card className="!py-3 text-sm">
+              <div className="flex items-center justify-between">
+                <p className="font-semibold text-danger-600">Sync failed</p>
+                <button onClick={() => setLastResult(null)} className="text-xs text-slate-400">
+                  Dismiss
+                </button>
+              </div>
+              <p className="mt-1 text-xs text-slate-500">{lastResult.error}</p>
+            </Card>
+          )}
+        </div>
+      )}
 
       <div className="mt-2 px-4 pb-4">
         {orders === null ? (

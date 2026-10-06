@@ -140,7 +140,8 @@ const WEBHOOK_TOPICS = ['ORDERS_CREATE', 'ORDERS_UPDATED']
 // Idempotently makes sure our orders/create + orders/updated webhooks are
 // registered, pointing at this project's shopify-webhook function. Safe to
 // call on every sync — skips topics that are already registered correctly.
-export async function ensureWebhooks(supabase: SupabaseClient) {
+// Returns the topics newly registered this call (empty if both already were).
+export async function ensureWebhooks(supabase: SupabaseClient): Promise<string[]> {
   const callbackUrl = `${Deno.env.get('SUPABASE_URL')!}/functions/v1/shopify-webhook`
 
   const existing = await shopifyGraphql(
@@ -156,6 +157,7 @@ export async function ensureWebhooks(supabase: SupabaseClient) {
       .map((e) => e.node.topic),
   )
 
+  const registered: string[] = []
   for (const topic of WEBHOOK_TOPICS) {
     if (have.has(topic)) continue
     const result = await shopifyGraphql(
@@ -171,8 +173,11 @@ export async function ensureWebhooks(supabase: SupabaseClient) {
     const errors = result.webhookSubscriptionCreate.userErrors
     if (errors?.length) {
       console.error(`ensureWebhooks: couldn't register ${topic}:`, JSON.stringify(errors))
+    } else {
+      registered.push(topic)
     }
   }
+  return registered
 }
 
 // Maps one Shopify Order node (GraphQL shape above) into shopify_orders +
@@ -180,8 +185,16 @@ export async function ensureWebhooks(supabase: SupabaseClient) {
 // (admin-confirmed) or, failing that, an exact SKU match. Idempotent on
 // shopify_order_id, so re-delivering the same webhook or re-running a
 // backfill never duplicates a row. SKUs with no mapping are left unmapped
-// (product_id null) rather than failing the sync.
-export async function upsertOrder(supabase: SupabaseClient, node: any): Promise<string> {
+// (product_id null) rather than failing the sync. Returns whether this was
+// a new row (for the admin-visible sync-result counts).
+export async function upsertOrder(supabase: SupabaseClient, node: any): Promise<{ id: string; created: boolean }> {
+  const { data: existing } = await supabase
+    .from('shopify_orders')
+    .select('id')
+    .eq('shopify_order_id', node.id)
+    .maybeSingle()
+  const created = !existing
+
   const row = {
     shopify_order_id: node.id,
     order_number: node.name ?? '',
@@ -247,5 +260,5 @@ export async function upsertOrder(supabase: SupabaseClient, node: any): Promise<
 
   await supabase.from('shopify_sync_ping').update({ last_synced_at: new Date().toISOString() }).eq('id', true)
 
-  return order.id as string
+  return { id: order.id as string, created }
 }
