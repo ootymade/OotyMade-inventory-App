@@ -1,35 +1,32 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import { supabase } from '../db/supabaseClient.js'
 
-const STORAGE_KEY = 'ooty-inventory:member'
 const TeamMemberContext = createContext(null)
 
-function readStored() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    return raw ? JSON.parse(raw) : null
-  } catch {
-    return null
-  }
-}
-
-export function TeamMemberProvider({ children }) {
-  const [member, setMemberState] = useState(readStored)
+// member: undefined = looking up, null = signed in but no team_members row
+// (shouldn't happen for the 6 seeded accounts), otherwise { name, role }.
+export function TeamMemberProvider({ session, children }) {
+  const [member, setMember] = useState(undefined)
 
   useEffect(() => {
-    if (member) localStorage.setItem(STORAGE_KEY, JSON.stringify(member))
-  }, [member])
+    let cancelled = false
+    setMember(undefined)
+    supabase
+      .from('team_members')
+      .select('name, role')
+      .eq('id', session.user.id)
+      .maybeSingle()
+      .then(({ data }) => {
+        if (!cancelled) setMember(data || null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [session.user.id])
 
-  const setMember = (next) => setMemberState(next)
-  const clearMember = () => {
-    localStorage.removeItem(STORAGE_KEY)
-    setMemberState(null)
-  }
+  const clearMember = () => supabase.auth.signOut()
 
-  return (
-    <TeamMemberContext.Provider value={{ member, setMember, clearMember }}>
-      {children}
-    </TeamMemberContext.Provider>
-  )
+  return <TeamMemberContext.Provider value={{ member, clearMember }}>{children}</TeamMemberContext.Provider>
 }
 
 export function useTeamMember() {

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
-import { supabase, SHARED_LOGIN_EMAIL } from '../db/supabaseClient.js'
+import { supabase } from '../db/supabaseClient.js'
 
 const AuthContext = createContext(null)
 
@@ -14,11 +14,8 @@ export function AuthProvider({ children }) {
     return () => sub.subscription.unsubscribe()
   }, [])
 
-  const signIn = async (password) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email: SHARED_LOGIN_EMAIL,
-      password,
-    })
+  const signIn = async (email, password) => {
+    const { error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw new Error('Incorrect password')
   }
 

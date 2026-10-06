@@ -11,6 +11,3 @@ if (!url || !anonKey) {
 // access control happens via Postgres Row Level Security, which only allows
 // reads/writes from a signed-in session (see AuthContext).
 export const supabase = createClient(url, anonKey)
-
-// One shared login for the whole team, in place of individual accounts.
-export const SHARED_LOGIN_EMAIL = 'team@ootymade-inventory.app'

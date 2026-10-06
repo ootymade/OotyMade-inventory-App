@@ -3,8 +3,7 @@ import { AuthProvider, useAuth } from './context/AuthContext.jsx'
 import { TeamMemberProvider, useTeamMember } from './context/TeamMemberContext.jsx'
 import { ToastProvider } from './context/ToastContext.jsx'
 import BottomNav from './components/BottomNav.jsx'
-import PasswordGate from './screens/onboarding/PasswordGate.jsx'
-import NamePicker from './screens/onboarding/NamePicker.jsx'
+import Login from './screens/onboarding/Login.jsx'
 import Dashboard from './screens/Dashboard.jsx'
 import ProductList from './screens/products/ProductList.jsx'
 import ProductDetail from './screens/products/ProductDetail.jsx'
@@ -26,7 +25,28 @@ import { Spinner } from './components/ui.jsx'
 
 function AppShell() {
   const { member } = useTeamMember()
-  if (!member) return <NamePicker />
+  const { signOut } = useAuth()
+
+  if (member === undefined) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <Spinner className="h-6 w-6 text-brand-600" />
+      </div>
+    )
+  }
+
+  if (member === null) {
+    return (
+      <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-slate-50 px-6 text-center">
+        <p className="text-sm text-slate-500">
+          Your account isn't set up yet. Ask an admin to add you to team_members.
+        </p>
+        <button onClick={signOut} className="text-sm font-semibold text-brand-600">
+          Sign out
+        </button>
+      </div>
+    )
+  }
 
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL}>
@@ -69,10 +89,10 @@ function Gate() {
     )
   }
 
-  if (!session) return <PasswordGate />
+  if (!session) return <Login />
 
   return (
-    <TeamMemberProvider>
+    <TeamMemberProvider session={session}>
       <AppShell />
     </TeamMemberProvider>
   )

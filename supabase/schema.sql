@@ -154,10 +154,35 @@ create table if not exists daily_order_counts (
 create index if not exists daily_order_counts_date_idx on daily_order_counts(order_date desc);
 
 -- ---------------------------------------------------------------------------
--- Row Level Security — only a signed-in team member (the one shared login)
--- can read or write anything. The public anon key alone gets nothing.
--- auth.role() is wrapped as (select auth.role()) so Postgres evaluates it
--- once per query instead of once per row (see auth_rls_initplan advisor).
+-- Team members — one row per person, id = their own auth.users id. Each of
+-- the 6 team members now has their own Supabase Auth login (replacing the
+-- single shared login) so RLS policies can tell who's asking — needed to
+-- enforce "Staff can't see revenue" at the database level, not just the UI.
+-- Seeding the 6 accounts (auth.users + auth.identities + this table) is a
+-- one-off operational script, intentionally not kept here since it embeds
+-- initial passwords — see chat history for that migration if ever re-run.
+-- ---------------------------------------------------------------------------
+
+create table if not exists team_members (
+  id uuid primary key references auth.users(id) on delete cascade,
+  name text not null,
+  role text not null check (role in ('admin', 'staff')),
+  created_at timestamptz not null default now()
+);
+
+alter table team_members enable row level security;
+
+drop policy if exists "team members readable by any signed-in user" on team_members;
+create policy "team members readable by any signed-in user" on team_members
+  for select using ((select auth.role()) = 'authenticated');
+-- Deliberately no insert/update/delete policy — roles are managed directly
+-- via SQL, never from the client.
+
+-- ---------------------------------------------------------------------------
+-- Row Level Security — only a signed-in team member can read or write
+-- anything. The public anon key alone gets nothing. auth.role() is wrapped
+-- as (select auth.role()) so Postgres evaluates it once per query instead
+-- of once per row (see auth_rls_initplan advisor).
 -- ---------------------------------------------------------------------------
 
 alter table suppliers enable row level security;
