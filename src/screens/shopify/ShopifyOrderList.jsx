@@ -260,10 +260,8 @@ export default function ShopifyOrderList() {
                     <Badge tone={FULFILLMENT_TONE[o.fulfillmentStatus] || 'slate'}>
                       {(o.fulfillmentStatus || '').replace(/_/g, ' ').toLowerCase() || 'unknown'}
                     </Badge>
-                    {(o.cancelledAt || (o.financialStatus && !['PAID', 'AUTHORIZED', 'PARTIALLY_REFUNDED'].includes(o.financialStatus))) && (
-                      <p className="mt-1 text-[11px] font-semibold text-danger-600">
-                        {o.cancelledAt ? 'Cancelled' : o.financialStatus.replace(/_/g, ' ').toLowerCase()}
-                      </p>
+                    {o.paymentHold && (
+                      <p className="mt-1 text-[11px] font-semibold text-danger-600">Payment issue — do not ship</p>
                     )}
                     {o.totalPrice != null && (
                       <p className="mt-1 text-[11px] text-slate-400">

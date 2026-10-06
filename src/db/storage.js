@@ -794,6 +794,11 @@ function rowToShopifyOrder(row) {
     workflowStatus: row.workflow_status,
     workflowUpdatedAt: row.workflow_updated_at,
     synced_at: row.synced_at,
+    // Derived, non-revenue flags — visible to Staff too, unlike everything
+    // below. This is the only payment signal Staff get: enough to know not
+    // to ship, never how much money is involved.
+    paymentHold: row.payment_hold,
+    isCod: row.is_cod,
     // null for Staff (masked by the view), a number for Admin.
     financialStatus: row.financial_status,
     currency: row.currency,

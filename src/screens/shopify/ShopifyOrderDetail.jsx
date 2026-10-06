@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { getShopifyOrderWithItems } from '../../db/storage.js'
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
+import { useTeamMember } from '../../context/TeamMemberContext.jsx'
 import { PageHeader, Card, Badge, Spinner, EmptyState } from '../../components/ui.jsx'
 import { ShoppingBagIcon } from '../../components/icons.jsx'
 
@@ -25,6 +26,7 @@ function money(amount, currency) {
 
 export default function ShopifyOrderDetail() {
   const { id } = useParams()
+  const { member } = useTeamMember()
   const [data, setData] = useState(null)
   const [notFound, setNotFound] = useState(false)
 
@@ -73,9 +75,10 @@ export default function ShopifyOrderDetail() {
           <Badge tone="brand">{(order.fulfillmentStatus || '').replace(/_/g, ' ').toLowerCase() || 'unknown'}</Badge>
         </div>
         <p className="text-xs text-slate-400">Placed {formatDate(order.createdAt)}</p>
-        {order.cancelledAt && <p className="text-xs font-semibold text-danger-600">Cancelled {formatDate(order.cancelledAt)}</p>}
-        {order.financialStatus && !['PAID', 'AUTHORIZED', 'PARTIALLY_REFUNDED'].includes(order.financialStatus) && (
-          <p className="text-xs font-semibold text-warn-600">Payment: {order.financialStatus.toLowerCase()}</p>
+        {order.paymentHold && <p className="text-xs font-semibold text-danger-600">Payment issue — do not ship</p>}
+        {order.cancelledAt && <p className="text-xs text-slate-400">Cancelled {formatDate(order.cancelledAt)}</p>}
+        {member?.isAdmin && order.financialStatus && !['PAID', 'AUTHORIZED', 'PARTIALLY_REFUNDED'].includes(order.financialStatus) && (
+          <p className="text-xs text-slate-400">Payment status: {order.financialStatus.toLowerCase()}</p>
         )}
       </Card>
 
