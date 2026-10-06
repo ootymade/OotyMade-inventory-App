@@ -21,6 +21,8 @@ import DirectOrderList from './screens/orders/DirectOrderList.jsx'
 import DirectOrderForm from './screens/orders/DirectOrderForm.jsx'
 import DirectOrderDetail from './screens/orders/DirectOrderDetail.jsx'
 import DailyOrders from './screens/daily/DailyOrders.jsx'
+import ShopifyOrderList from './screens/shopify/ShopifyOrderList.jsx'
+import ShopifyOrderDetail from './screens/shopify/ShopifyOrderDetail.jsx'
 import { Spinner } from './components/ui.jsx'
 
 function AppShell() {
@@ -71,6 +73,8 @@ function AppShell() {
           <Route path="/direct-orders/new" element={<DirectOrderForm />} />
           <Route path="/direct-orders/:id" element={<DirectOrderDetail />} />
           <Route path="/daily-orders" element={<DailyOrders />} />
+          <Route path="/shopify-orders" element={<ShopifyOrderList />} />
+          <Route path="/shopify-orders/:id" element={<ShopifyOrderDetail />} />
         </Routes>
       </div>
       <BottomNav />

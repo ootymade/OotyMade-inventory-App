@@ -13,6 +13,7 @@ import {
   TruckIcon,
   SyncIcon,
   ReceiptIcon,
+  ShoppingBagIcon,
 } from '../components/icons.jsx'
 
 const REALTIME_TABLES = ['products', 'movements', 'purchase_orders', 'invoices', 'daily_order_counts']
@@ -270,6 +271,10 @@ export default function Dashboard() {
       </div>
 
       <div className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 text-xs text-slate-400">
+        <Link to="/shopify-orders" className="flex items-center gap-1">
+          <ShoppingBagIcon className="h-4 w-4" /> Shopify orders
+        </Link>
+        <span>·</span>
         <Link to="/direct-orders" className="flex items-center gap-1">
           <ReceiptIcon className="h-4 w-4" /> Direct orders
         </Link>

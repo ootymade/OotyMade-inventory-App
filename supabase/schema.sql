@@ -415,6 +415,148 @@ revoke execute on function confirm_direct_order(uuid, text, text) from public, a
 grant execute on function confirm_direct_order(uuid, text, text) to authenticated;
 
 -- ---------------------------------------------------------------------------
+-- Shopify Orders (read-only sync, Phase 2 of the Shopify integration).
+-- Shopify writes/reads only ever happen inside Supabase Edge Functions
+-- (supabase/functions/shopify-sync-orders, shopify-webhook) using a
+-- client_credentials token cached in shopify_token_cache — Shopify
+-- credentials never reach the browser. These tables never affect
+-- `products.quantity`; that's a separate, explicitly-opt-in later phase.
+-- ---------------------------------------------------------------------------
+
+create table if not exists shopify_orders (
+  id uuid primary key default gen_random_uuid(),
+  shopify_order_id text not null unique,
+  order_number text not null default '',
+  shopify_created_at timestamptz not null,
+  shopify_updated_at timestamptz not null,
+  cancelled_at timestamptz,
+  financial_status text default '',
+  fulfillment_status text default '',
+  currency text not null default 'INR',
+  customer_name text default '',
+  customer_phone text default '',
+  customer_email text default '',
+  shipping_address jsonb,
+  billing_address jsonb,
+  subtotal_price numeric default 0,
+  total_tax numeric default 0,
+  total_price numeric default 0,
+  tags text default '',
+  note text default '',
+  -- Internal workflow, distinct from Shopify's own fulfillment_status.
+  workflow_status text not null default 'new' check (workflow_status in ('new','packing','packed','shipped','delivered')),
+  workflow_updated_by uuid references team_members(id) on delete set null,
+  workflow_updated_at timestamptz,
+  raw jsonb,
+  synced_at timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists shopify_orders_created_idx on shopify_orders(shopify_created_at desc);
+create index if not exists shopify_orders_workflow_idx on shopify_orders(workflow_status);
+
+create table if not exists shopify_order_items (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid not null references shopify_orders(id) on delete cascade,
+  shopify_line_item_id text not null,
+  sku text default '',
+  title text not null default '',
+  variant_title text default '',
+  quantity numeric not null default 0,
+  unfulfilled_quantity numeric not null default 0,
+  unit_price numeric default 0,
+  -- Matched by exact SKU against products.sku; null = unmapped (shown as a
+  -- warning in the UI, never blocks the order).
+  product_id uuid references products(id) on delete set null,
+  unique (order_id, shopify_line_item_id)
+);
+create index if not exists shopify_order_items_order_idx on shopify_order_items(order_id);
+create index if not exists shopify_order_items_product_idx on shopify_order_items(product_id);
+
+-- Cached client_credentials OAuth token. Only Edge Functions (service role,
+-- which bypasses RLS) ever read/write this — RLS is enabled with zero
+-- policies so no client role can touch it either way.
+create table if not exists shopify_token_cache (
+  id boolean primary key default true check (id),
+  access_token text not null,
+  expires_at timestamptz not null
+);
+
+-- A single-row "something changed" signal the client subscribes to via
+-- Realtime, instead of subscribing to shopify_orders directly — Realtime
+-- delivers full row payloads regardless of the masking view below, so
+-- subscribing to the real table would leak revenue over the wire. Edge
+-- Functions touch this row after every successful order upsert.
+create table if not exists shopify_sync_ping (
+  id boolean primary key default true check (id),
+  last_synced_at timestamptz not null default now()
+);
+insert into shopify_sync_ping (id) values (true) on conflict do nothing;
+
+alter table shopify_orders enable row level security;
+alter table shopify_order_items enable row level security;
+alter table shopify_token_cache enable row level security;
+alter table shopify_sync_ping enable row level security;
+
+drop policy if exists "ping readable" on shopify_sync_ping;
+create policy "ping readable" on shopify_sync_ping
+  for select using ((select auth.role()) = 'authenticated');
+
+-- No policies at all on shopify_orders/shopify_order_items/shopify_token_cache
+-- for `authenticated` — RLS with zero policies blocks every row for every
+-- client role. Supabase's default privileges additionally grant table
+-- access to anon/authenticated on any new object, so that's revoked too.
+revoke all on shopify_orders from authenticated, anon, public;
+revoke all on shopify_order_items from authenticated, anon, public;
+revoke all on shopify_token_cache from authenticated, anon, public;
+revoke all on shopify_sync_ping from authenticated, anon, public;
+grant select on shopify_sync_ping to authenticated;
+
+-- Masking views: the only way the client reads Shopify order data. They
+-- run as the view owner (bypassing the base tables' RLS lockout above) and
+-- apply their own role check against team_members — financial_status,
+-- currency, subtotal/tax/total and line-item unit_price all come back
+-- null unless the calling auth.uid() maps to an 'admin' team_members row.
+-- This enforces "Staff can't see revenue" in Postgres, not just the UI.
+create or replace view shopify_orders_view as
+select
+  so.id, so.shopify_order_id, so.order_number, so.shopify_created_at, so.shopify_updated_at,
+  so.cancelled_at, so.fulfillment_status, so.customer_name, so.customer_phone, so.customer_email,
+  so.shipping_address, so.billing_address, so.tags, so.note,
+  so.workflow_status, so.workflow_updated_by, so.workflow_updated_at, so.synced_at,
+  case when tm.role = 'admin' then so.financial_status else null end as financial_status,
+  case when tm.role = 'admin' then so.currency else null end as currency,
+  case when tm.role = 'admin' then so.subtotal_price else null end as subtotal_price,
+  case when tm.role = 'admin' then so.total_tax else null end as total_tax,
+  case when tm.role = 'admin' then so.total_price else null end as total_price
+from shopify_orders so
+left join team_members tm on tm.id = (select auth.uid());
+
+create or replace view shopify_order_items_view as
+select
+  oi.id, oi.order_id, oi.shopify_line_item_id, oi.sku, oi.title, oi.variant_title,
+  oi.quantity, oi.unfulfilled_quantity, oi.product_id,
+  case when tm.role = 'admin' then oi.unit_price else null end as unit_price
+from shopify_order_items oi
+left join team_members tm on tm.id = (select auth.uid());
+
+revoke all on shopify_orders_view from authenticated, anon, public;
+revoke all on shopify_order_items_view from authenticated, anon, public;
+grant select on shopify_orders_view to authenticated;
+grant select on shopify_order_items_view to authenticated;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_publication_tables
+    where pubname = 'supabase_realtime' and schemaname = 'public' and tablename = 'shopify_sync_ping'
+  ) then
+    execute 'alter publication supabase_realtime add table public.shopify_sync_ping';
+  end if;
+end $$;
+
+-- ---------------------------------------------------------------------------
 -- Realtime: broadcast changes on every table the app reads, so all 5 phones
 -- see the same data live.
 -- ---------------------------------------------------------------------------

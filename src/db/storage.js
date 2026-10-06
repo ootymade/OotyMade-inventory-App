@@ -766,3 +766,88 @@ export async function getTodayOrderSummary() {
   const total = counts.reduce((s, c) => s + c.orderCount, 0)
   return { date: today, total, byChannel }
 }
+
+// ---------------------------------------------------------------------------
+// Shopify Orders (read-only sync) — reads go through shopify_orders_view /
+// shopify_order_items_view, never the base tables, so revenue columns come
+// back null for Staff at the database level (see supabase/schema.sql).
+// Writes to Shopify, and to shopify_orders itself, only ever happen inside
+// Supabase Edge Functions — this module only triggers a sync and reads.
+// ---------------------------------------------------------------------------
+
+function rowToShopifyOrder(row) {
+  return {
+    id: row.id,
+    shopifyOrderId: row.shopify_order_id,
+    orderNumber: row.order_number,
+    createdAt: row.shopify_created_at,
+    updatedAt: row.shopify_updated_at,
+    cancelledAt: row.cancelled_at,
+    fulfillmentStatus: row.fulfillment_status || '',
+    customerName: row.customer_name || '',
+    customerPhone: row.customer_phone || '',
+    customerEmail: row.customer_email || '',
+    shippingAddress: row.shipping_address,
+    billingAddress: row.billing_address,
+    tags: row.tags || '',
+    note: row.note || '',
+    workflowStatus: row.workflow_status,
+    workflowUpdatedAt: row.workflow_updated_at,
+    synced_at: row.synced_at,
+    // null for Staff (masked by the view), a number for Admin.
+    financialStatus: row.financial_status,
+    currency: row.currency,
+    subtotalPrice: row.subtotal_price != null ? Number(row.subtotal_price) : null,
+    totalTax: row.total_tax != null ? Number(row.total_tax) : null,
+    totalPrice: row.total_price != null ? Number(row.total_price) : null,
+  }
+}
+
+function rowToShopifyOrderItem(row) {
+  return {
+    id: row.id,
+    orderId: row.order_id,
+    sku: row.sku || '',
+    title: row.title,
+    variantTitle: row.variant_title || '',
+    quantity: Number(row.quantity),
+    unfulfilledQuantity: Number(row.unfulfilled_quantity),
+    productId: row.product_id || '',
+    unitPrice: row.unit_price != null ? Number(row.unit_price) : null,
+  }
+}
+
+export async function listShopifyOrders({ workflowStatus = '' } = {}) {
+  let query = supabase.from('shopify_orders_view').select('*').order('shopify_created_at', { ascending: false })
+  if (workflowStatus) query = query.eq('workflow_status', workflowStatus)
+  const { data, error } = await query
+  must(error)
+  return data.map(rowToShopifyOrder)
+}
+
+export async function getShopifyOrderWithItems(id) {
+  const [{ data: order, error }, { data: items, error: itemsError }] = await Promise.all([
+    supabase.from('shopify_orders_view').select('*').eq('id', id).maybeSingle(),
+    supabase.from('shopify_order_items_view').select('*').eq('order_id', id).order('id'),
+  ])
+  must(error)
+  must(itemsError)
+  if (!order) return undefined
+  return { order: rowToShopifyOrder(order), items: (items || []).map(rowToShopifyOrderItem) }
+}
+
+// Triggers the shopify-sync-orders Edge Function (backfill / manual
+// refresh). Uses the signed-in team member's own session — the function
+// requires a valid Supabase session and does all the actual Shopify calls
+// server-side.
+export async function refreshShopifyOrders() {
+  const { data, error } = await supabase.functions.invoke('shopify-sync-orders', { method: 'POST' })
+  if (error) throw new Error(error.message || 'Refresh failed')
+  return data
+}
+
+export async function getShopifySyncPing() {
+  const { data, error } = await supabase.from('shopify_sync_ping').select('last_synced_at').eq('id', true).maybeSingle()
+  must(error)
+  return data?.last_synced_at
+}

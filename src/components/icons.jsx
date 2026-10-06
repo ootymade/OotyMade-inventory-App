@@ -171,3 +171,10 @@ export const PackageCheckIcon = (props) => (
     <path d="M9.5 12.5l1.8 1.8L15 10.5" />
   </svg>
 )
+
+export const ShoppingBagIcon = (props) => (
+  <svg {...base} {...props}>
+    <path d="M6 8h12l-1 12H7L6 8z" />
+    <path d="M9 8V6a3 3 0 0 1 6 0v2" />
+  </svg>
+)
