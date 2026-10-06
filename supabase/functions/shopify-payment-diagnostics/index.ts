@@ -8,7 +8,7 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { adminClient, shopifyGraphql, CORS_HEADERS } from '../_shared/shopify.ts'
+import { adminClient, shopifyGraphql, getSyncSettings, parseOrderNumber, CORS_HEADERS } from '../_shared/shopify.ts'
 
 const QUERY = `
   query OrderPayments($id: ID!) {
@@ -23,6 +23,11 @@ const QUERY = `
     }
   }
 `
+
+// Same self-imposed budget as shopify-sync-orders, for the same reason:
+// stop cleanly well short of the platform's hard kill so there's always a
+// real, parseable result instead of a dead connection.
+const DEADLINE_MS = 100_000
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -57,10 +62,19 @@ Deno.serve(async (req: Request) => {
       })
     }
 
-    const { data: orders, error: ordersError } = await supabase
+    const { firstOrderNumber } = await getSyncSettings(supabase)
+
+    const { data: allOrders, error: ordersError } = await supabase
       .from('shopify_orders')
       .select('shopify_order_id, order_number')
     if (ordersError) throw ordersError
+
+    // Scoped to the same cutoff as the sync/webhook — orders below #16600
+    // are out of scope for this integration entirely, diagnostics included.
+    const orders = (allOrders ?? []).filter((o) => {
+      const n = parseOrderNumber(o.order_number ?? '')
+      return n === null || n >= firstOrderNumber
+    })
 
     const byFinancialStatus: Record<string, number> = {}
     const byGateway: Record<string, number> = {}
@@ -68,8 +82,14 @@ Deno.serve(async (req: Request) => {
     const fulfilledStillAuthorized: { orderNumber: string; captured: boolean; transactions: unknown[] }[] = []
     let checked = 0
     let failed = 0
+    let partial = false
+    const startedAt = Date.now()
 
-    for (const o of orders ?? []) {
+    for (const o of orders) {
+      if (Date.now() - startedAt > DEADLINE_MS) {
+        partial = true
+        break
+      }
       let data
       try {
         data = await shopifyGraphql(supabase, QUERY, { id: o.shopify_order_id })
@@ -104,7 +124,8 @@ Deno.serve(async (req: Request) => {
 
     const report = {
       ok: true,
-      totalOrders: (orders ?? []).length,
+      partial,
+      totalOrders: orders.length,
       checked,
       failed,
       byFinancialStatus,
