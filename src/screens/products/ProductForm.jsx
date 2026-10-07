@@ -7,6 +7,8 @@ import {
   getProduct,
   listSuppliers,
   listCategories,
+  setProductPackSize,
+  setProductGstRate,
 } from '../../db/storage.js'
 import { PageHeader, Field, Input, Select, Button, Spinner } from '../../components/ui.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
@@ -50,6 +52,9 @@ export default function ProductForm() {
   const [saving, setSaving] = useState(false)
   const [suppliers, setSuppliers] = useState([])
   const [categories, setCategories] = useState([])
+  const [original, setOriginal] = useState(null)
+  const [conversionQuantity, setConversionQuantity] = useState('')
+  const [conversionNote, setConversionNote] = useState('')
   const [form, setForm] = useState({
     sku: searchParams.get('sku') || '',
     name: '',
@@ -61,6 +66,7 @@ export default function ProductForm() {
     unitCost: '',
     photo: '',
     packSizeGrams: '',
+    gstRate: '',
   })
   const [errors, setErrors] = useState({})
 
@@ -72,10 +78,17 @@ export default function ProductForm() {
   useEffect(() => {
     if (!isEdit) return
     getProduct(id).then((p) => {
-      if (p) setForm(p)
+      if (p) {
+        setForm(p)
+        setOriginal(p)
+      }
       setLoading(false)
     })
   }, [id, isEdit])
+
+  const packSizeChanged = isEdit && original && (Number(form.packSizeGrams) || null) !== (original.packSizeGrams || null)
+  const needsConversion = packSizeChanged && Number(original?.quantity) !== 0
+  const gstRateChanged = isEdit && original && (form.gstRate === '' ? null : Number(form.gstRate)) !== (original.gstRate ?? null)
 
   const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }))
 
@@ -90,6 +103,9 @@ export default function ProductForm() {
     const errs = {}
     if (!form.sku.trim()) errs.sku = 'SKU is required'
     if (!form.name.trim()) errs.name = 'Name is required'
+    if (needsConversion && (conversionQuantity === '' || !conversionNote.trim())) {
+      errs.conversion = 'Enter the new pack count and a note to convert existing stock'
+    }
     setErrors(errs)
     return Object.keys(errs).length === 0
   }
@@ -101,6 +117,17 @@ export default function ProductForm() {
     try {
       if (isEdit) {
         await updateProduct(id, form)
+        if (packSizeChanged) {
+          await setProductPackSize({
+            productId: id,
+            packSizeGrams: form.packSizeGrams,
+            newQuantity: needsConversion ? conversionQuantity : null,
+            note: needsConversion ? conversionNote : null,
+          })
+        }
+        if (gstRateChanged) {
+          await setProductGstRate(id, form.gstRate)
+        }
         push('Product updated', { tone: 'success' })
         navigate(`/products/${id}`)
       } else {
@@ -214,6 +241,41 @@ export default function ProductForm() {
         >
           <Input type="number" min="0" value={form.packSizeGrams} onChange={set('packSizeGrams')} placeholder="e.g. 500" />
         </Field>
+
+        {needsConversion && (
+          <div className="space-y-3 rounded-xl bg-amber-50 p-3 ring-1 ring-amber-200">
+            <p className="text-xs text-amber-700">
+              This product has {original.quantity} {original.unit} on hand under the current pack size. Changing it
+              would silently change what that number means, so enter today's actual pack count and a note — it's
+              recorded as a stock conversion, same as any other stock change.
+            </p>
+            <Field label="New pack count" error={errors.conversion}>
+              <Input
+                type="number"
+                min="0"
+                value={conversionQuantity}
+                onChange={(e) => setConversionQuantity(e.target.value)}
+                placeholder="e.g. 18"
+              />
+            </Field>
+            <Field label="Conversion note">
+              <Input
+                value={conversionNote}
+                onChange={(e) => setConversionNote(e.target.value)}
+                placeholder="e.g. Repacked 500g into 250g pouches, recounted"
+              />
+            </Field>
+          </div>
+        )}
+
+        {isEdit && member?.isAdmin && (
+          <Field
+            label="GST rate % (optional override)"
+            hint="Blank uses the default rate at sale time. Confirm the actual rate with your CA before setting this — admins only."
+          >
+            <Input type="number" min="0" max="100" step="0.01" value={form.gstRate ?? ''} onChange={set('gstRate')} placeholder="e.g. 5" />
+          </Field>
+        )}
 
         <Field label="Unit cost (₹)" hint="Used to estimate total stock value">
           <Input type="number" min="0" step="0.01" value={form.unitCost} onChange={set('unitCost')} />

@@ -27,6 +27,7 @@ function rowToProduct(row) {
     hsnCode: row.hsn_code || '1806',
     packSizeGrams: row.pack_size_grams != null ? Number(row.pack_size_grams) : null,
     hasBeenCounted: row.has_been_counted !== false,
+    gstRate: row.gst_rate != null ? Number(row.gst_rate) : null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -176,7 +177,10 @@ export async function updateProduct(id, data) {
   if (data.unitCost !== undefined) row.unit_cost = Number(data.unitCost) || 0
   if (data.photo !== undefined) row.photo = data.photo
   if (data.hsnCode !== undefined) row.hsn_code = clean(data.hsnCode) || '1806'
-  if (data.packSizeGrams !== undefined) row.pack_size_grams = data.packSizeGrams ? Number(data.packSizeGrams) : null
+  // pack_size_grams, gst_rate, quantity and has_been_counted are not writable
+  // by a plain update (locked at the grant level) — they only change through
+  // setProductPackSize / setProductGstRate / adjustStock / markProductCounted
+  // below, each of which records why the change happened.
   row.updated_at = new Date().toISOString()
 
   const { data: updated, error } = await supabase.from('products').update(row).eq('id', id).select().single()
@@ -187,6 +191,49 @@ export async function updateProduct(id, data) {
 export async function deleteProduct(id) {
   const { error } = await supabase.from('products').delete().eq('id', id)
   must(error)
+}
+
+// Any signed-in team member — confirms a brand-new, never-counted product
+// genuinely has zero on hand (rather than waiting for a stock movement that
+// will never come, since there's nothing to move). Recorded as its own
+// movement entry (who/when), same audit trail as everything else.
+export async function markProductCounted(productId, note) {
+  const { data, error } = await supabase.rpc('mark_product_counted', {
+    p_product_id: productId,
+    p_note: note || null,
+  })
+  must(error)
+  return rowToProduct(data)
+}
+
+// Changing pack size reinterprets existing stock (packs vs grams), so this
+// is its own RPC rather than a plain field update: on a product that
+// already has stock, it requires the new pack count and a note explaining
+// the conversion, recorded as a movement; on a product at 0 it's a plain,
+// no-fuss change. newQuantity/note are ignored (and not required) when the
+// product's current quantity is 0.
+export async function setProductPackSize({ productId, packSizeGrams, newQuantity, note }) {
+  const { data, error } = await supabase.rpc('set_product_pack_size', {
+    p_product_id: productId,
+    p_pack_size_grams: packSizeGrams ? Number(packSizeGrams) : null,
+    p_new_quantity: newQuantity != null && newQuantity !== '' ? Number(newQuantity) : null,
+    p_note: note || null,
+  })
+  must(error)
+  return rowToProduct(data)
+}
+
+// Admin-only — enforced by the RPC itself (checks team_members.role),
+// not just the UI. Used as the default GST % on new invoice lines for
+// this product; never rewrites a GST rate already baked into a past
+// invoice, since invoice line amounts are fixed at creation time.
+export async function setProductGstRate(productId, gstRate) {
+  const { data, error } = await supabase.rpc('set_product_gst_rate', {
+    p_product_id: productId,
+    p_gst_rate: gstRate === '' || gstRate == null ? null : Number(gstRate),
+  })
+  must(error)
+  return rowToProduct(data)
 }
 
 // ---------------------------------------------------------------------------

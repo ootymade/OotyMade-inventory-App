@@ -1,9 +1,10 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
-import { getProduct, getSupplier, listMovements } from '../../db/storage.js'
+import { getProduct, getSupplier, listMovements, markProductCounted } from '../../db/storage.js'
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
 import { formatWeight, productWeightGrams } from '../../lib/weight.js'
+import { useToast } from '../../context/ToastContext.jsx'
 import { PageHeader, Card, Badge, Button, Spinner, EmptyState } from '../../components/ui.jsx'
 import { PlusIcon, MinusIcon, EditIcon, QrIcon, BoxIcon, TruckIcon } from '../../components/icons.jsx'
 
@@ -14,6 +15,8 @@ const REASON_LABEL = {
   sold: 'Sold',
   damaged: 'Damaged',
   adjustment: 'Adjusted',
+  counted_zero: 'Counted (zero)',
+  pack_size_conversion: 'Pack size changed',
 }
 
 function formatDate(iso) {
@@ -28,11 +31,13 @@ function formatDate(iso) {
 export default function ProductDetail() {
   const { id } = useParams()
   const navigate = useNavigate()
+  const { push } = useToast()
   const [product, setProduct] = useState(null)
   const [supplier, setSupplier] = useState(null)
   const [movements, setMovements] = useState(null)
   const [showLabel, setShowLabel] = useState(false)
   const [notFound, setNotFound] = useState(false)
+  const [marking, setMarking] = useState(false)
 
   const load = useCallback(async () => {
     const p = await getProduct(id)
@@ -50,6 +55,20 @@ export default function ProductDetail() {
   }, [load])
 
   useRealtimeRefresh(REALTIME_TABLES, load)
+
+  const markCounted = async () => {
+    if (!confirm('Confirm this product is genuinely at zero stock right now?')) return
+    setMarking(true)
+    try {
+      await markProductCounted(id)
+      push('Marked as counted', { tone: 'success' })
+      await load()
+    } catch (err) {
+      push(err.message, { tone: 'error' })
+    } finally {
+      setMarking(false)
+    }
+  }
 
   if (notFound) {
     return (
@@ -106,11 +125,18 @@ export default function ProductDetail() {
             {low && <Badge tone="danger">Below threshold ({product.lowStockThreshold})</Badge>}
             {!product.hasBeenCounted && (
               <p className="mt-1 text-xs text-amber-600">
-                No physical count yet — enter today's pack count via Stock In, reason "Adjustment (count correction)"
+                No physical count yet — enter today's pack count via Stock In, reason "Adjustment (count correction)",
+                or if it's genuinely zero right now, use "Mark as counted" below instead.
               </p>
             )}
           </div>
         </Card>
+
+        {!product.hasBeenCounted && product.quantity === 0 && (
+          <Button variant="outline" className="w-full" onClick={markCounted} disabled={marking}>
+            {marking ? <Spinner className="h-4 w-4" /> : 'Mark as counted (zero stock)'}
+          </Button>
+        )}
 
         <div className="grid grid-cols-2 gap-3">
           <Button

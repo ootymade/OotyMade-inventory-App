@@ -42,6 +42,7 @@ export default function DirectOrderForm() {
       name: p.name,
       hsnCode: p.hsnCode || '1806',
       unitPrice: p.unitCost || 0,
+      gstRate: p.gstRate != null ? p.gstRate : DEFAULT_GST_RATE,
     })
   }
 
