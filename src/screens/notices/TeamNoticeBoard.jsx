@@ -1,9 +1,18 @@
 import { useCallback, useEffect, useState } from 'react'
-import { listNotices, createNotice, setNoticePinned, markNoticeSeen, listNoticeSeenBy } from '../../db/storage.js'
+import {
+  listNotices,
+  createNotice,
+  setNoticePinned,
+  editNotice,
+  hideNotice,
+  unhideNotice,
+  markNoticeSeen,
+  listNoticeSeenBy,
+} from '../../db/storage.js'
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
-import { PageHeader, Card, Button, Textarea, Spinner, EmptyState, Badge } from '../../components/ui.jsx'
+import { PageHeader, Card, Button, Input, Textarea, Spinner, EmptyState, Badge } from '../../components/ui.jsx'
 import { PinIcon } from '../../components/icons.jsx'
 
 const REALTIME_TABLES = ['team_notices', 'team_notice_seen']
@@ -22,11 +31,7 @@ function SeenBy({ noticeId, open }) {
   if (!open) return null
   if (seenBy === null) return <Spinner className="mt-2 h-4 w-4 text-brand-600" />
   if (seenBy.length === 0) return <p className="mt-2 text-xs text-slate-400">No one has seen this yet</p>
-  return (
-    <p className="mt-2 text-xs text-slate-400">
-      Seen by {seenBy.map((s) => s.name).join(', ')}
-    </p>
-  )
+  return <p className="mt-2 text-xs text-slate-400">Seen by {seenBy.map((s) => s.name).join(', ')}</p>
 }
 
 export default function TeamNoticeBoard() {
@@ -37,6 +42,10 @@ export default function TeamNoticeBoard() {
   const [body, setBody] = useState('')
   const [posting, setPosting] = useState(false)
   const [expanded, setExpanded] = useState(null)
+  const [editingId, setEditingId] = useState(null)
+  const [editBody, setEditBody] = useState('')
+  const [hidingId, setHidingId] = useState(null)
+  const [hideReason, setHideReason] = useState('')
 
   // If the Stage A tables haven't been created yet, fail quietly — an
   // empty board, not a stuck spinner or a technical error on screen.
@@ -82,7 +91,53 @@ export default function TeamNoticeBoard() {
 
   const togglePin = async (notice) => {
     try {
-      await setNoticePinned(notice.id, !notice.pinned, member)
+      await setNoticePinned(notice.id, !notice.pinned)
+      load()
+    } catch (err) {
+      push(err.message, { tone: 'error' })
+    }
+  }
+
+  const startEdit = (notice) => {
+    setEditingId(notice.id)
+    setEditBody(notice.body)
+  }
+
+  const saveEdit = async () => {
+    try {
+      await editNotice(editingId, editBody)
+      setEditingId(null)
+      push('Updated', { tone: 'success' })
+      load()
+    } catch (err) {
+      push(err.message, { tone: 'error' })
+    }
+  }
+
+  const startHide = (notice) => {
+    setHidingId(notice.id)
+    setHideReason('')
+  }
+
+  const confirmHide = async () => {
+    if (!hideReason.trim()) {
+      push('A reason is required to hide a post', { tone: 'error' })
+      return
+    }
+    try {
+      await hideNotice(hidingId, hideReason)
+      setHidingId(null)
+      push('Hidden', { tone: 'success' })
+      load()
+    } catch (err) {
+      push(err.message, { tone: 'error' })
+    }
+  }
+
+  const unhide = async (notice) => {
+    try {
+      await unhideNotice(notice.id)
+      push('Unhidden', { tone: 'success' })
       load()
     } catch (err) {
       push(err.message, { tone: 'error' })
@@ -110,29 +165,82 @@ export default function TeamNoticeBoard() {
       ) : (
         <div className="space-y-3">
           {notices.map((n) => (
-            <Card key={n.id} className="space-y-1">
-              <div className="flex items-start justify-between gap-2">
-                <p className="whitespace-pre-wrap text-sm text-slate-800">{n.body}</p>
-                {n.pinned && (
-                  <Badge tone="brand">
-                    <PinIcon className="h-3 w-3" />
-                  </Badge>
-                )}
-              </div>
-              <p className="text-xs text-slate-400">{formatDate(n.createdAt)}</p>
-              <div className="flex items-center gap-3 pt-1">
-                {member?.isAdmin && (
-                  <button className="text-xs font-semibold text-brand-600" onClick={() => togglePin(n)}>
-                    {n.pinned ? 'Unpin' : 'Pin'}
+            <Card key={n.id} className={`space-y-1 ${n.hiddenAt ? 'bg-slate-50 ring-1 ring-slate-200' : ''}`}>
+              {n.hiddenAt && (
+                <Badge tone="slate" className="mb-1">
+                  Hidden{n.hiddenReason ? `: ${n.hiddenReason}` : ''}
+                </Badge>
+              )}
+
+              {editingId === n.id ? (
+                <div className="space-y-2">
+                  <Textarea rows={3} value={editBody} onChange={(e) => setEditBody(e.target.value)} />
+                  <div className="flex gap-2">
+                    <Button size="sm" onClick={saveEdit}>
+                      Save
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setEditingId(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-start justify-between gap-2">
+                  <p className="whitespace-pre-wrap text-sm text-slate-800">{n.body}</p>
+                  {n.pinned && (
+                    <Badge tone="brand">
+                      <PinIcon className="h-3 w-3" />
+                    </Badge>
+                  )}
+                </div>
+              )}
+
+              <p className="text-xs text-slate-400">
+                {formatDate(n.createdAt)}
+                {n.editedAt && ' · edited'}
+              </p>
+
+              {hidingId === n.id ? (
+                <div className="space-y-2 pt-1">
+                  <Input value={hideReason} onChange={(e) => setHideReason(e.target.value)} placeholder="Reason for hiding..." />
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={confirmHide}>
+                      Confirm hide
+                    </Button>
+                    <Button size="sm" variant="ghost" onClick={() => setHidingId(null)}>
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center gap-3 pt-1">
+                  {member?.isAdmin && editingId !== n.id && (
+                    <>
+                      <button className="text-xs font-semibold text-brand-600" onClick={() => togglePin(n)}>
+                        {n.pinned ? 'Unpin' : 'Pin'}
+                      </button>
+                      <button className="text-xs font-semibold text-brand-600" onClick={() => startEdit(n)}>
+                        Edit
+                      </button>
+                      {n.hiddenAt ? (
+                        <button className="text-xs font-semibold text-slate-500" onClick={() => unhide(n)}>
+                          Unhide
+                        </button>
+                      ) : (
+                        <button className="text-xs font-semibold text-danger-600" onClick={() => startHide(n)}>
+                          Hide
+                        </button>
+                      )}
+                    </>
+                  )}
+                  <button
+                    className="text-xs font-semibold text-slate-400"
+                    onClick={() => setExpanded(expanded === n.id ? null : n.id)}
+                  >
+                    {expanded === n.id ? 'Hide seen by' : 'Seen by'}
                   </button>
-                )}
-                <button
-                  className="text-xs font-semibold text-slate-400"
-                  onClick={() => setExpanded(expanded === n.id ? null : n.id)}
-                >
-                  {expanded === n.id ? 'Hide seen by' : 'Seen by'}
-                </button>
-              </div>
+                </div>
+              )}
               <SeenBy noticeId={n.id} open={expanded === n.id} />
             </Card>
           ))}

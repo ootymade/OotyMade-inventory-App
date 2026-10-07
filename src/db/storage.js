@@ -1179,8 +1179,11 @@ export async function getShopifySyncPing() {
 
 // ---------------------------------------------------------------------------
 // Team Notice Board — Stage A: announcements + order notes. No chat, no
-// photos, no push yet (later stages). Admin-only posting/pinning is
-// enforced by RLS on team_notices itself, not just hidden in the UI.
+// photos, no push yet (later stages). Posting is admin-only via RLS;
+// pinning, editing, hiding and unhiding all go through admin-checked
+// RPCs instead of a direct UPDATE — team_notices/order_notes carry no
+// UPDATE grant at all, so there is no path to change a row except
+// through these functions, each of which checks admin status itself.
 // ---------------------------------------------------------------------------
 
 function rowToNotice(row) {
@@ -1189,13 +1192,19 @@ function rowToNotice(row) {
     body: row.body,
     createdBy: row.created_by,
     createdAt: row.created_at,
+    editedAt: row.edited_at,
     pinned: row.pinned,
     pinnedAt: row.pinned_at,
     pinnedBy: row.pinned_by,
+    hiddenAt: row.hidden_at,
+    hiddenBy: row.hidden_by,
+    hiddenReason: row.hidden_reason,
     updatedAt: row.updated_at,
   }
 }
 
+// Staff only ever get non-hidden rows back (enforced by RLS); admins get
+// hidden ones too, marked so the UI can show them as hidden.
 export async function listNotices() {
   const { data, error } = await supabase
     .from('team_notices')
@@ -1212,18 +1221,33 @@ export async function createNotice(body, member) {
   must(error)
 }
 
-// Admin-only — enforced by RLS. Toggles pinned on/off.
-export async function setNoticePinned(id, pinned, member) {
-  const { error } = await supabase
-    .from('team_notices')
-    .update({
-      pinned,
-      pinned_at: pinned ? new Date().toISOString() : null,
-      pinned_by: pinned ? member.id : null,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', id)
+// Admin-only — enforced by the RPC (checks team_members.role), not just
+// the UI. Toggles pinned on/off.
+export async function setNoticePinned(id, pinned) {
+  const { data, error } = await supabase.rpc('set_notice_pinned', { p_notice_id: id, p_pinned: pinned })
   must(error)
+  return rowToNotice(data)
+}
+
+// Admin-only. Keeps the original post date; edited_at records the change.
+export async function editNotice(id, body) {
+  const { data, error } = await supabase.rpc('edit_notice', { p_notice_id: id, p_body: body })
+  must(error)
+  return rowToNotice(data)
+}
+
+// Admin-only. A reason is required — stored for the audit trail, shown
+// to other admins. The row stays; staff just stop seeing it.
+export async function hideNotice(id, reason) {
+  const { data, error } = await supabase.rpc('hide_notice', { p_notice_id: id, p_reason: reason })
+  must(error)
+  return rowToNotice(data)
+}
+
+export async function unhideNotice(id) {
+  const { data, error } = await supabase.rpc('unhide_notice', { p_notice_id: id })
+  must(error)
+  return rowToNotice(data)
 }
 
 // Any signed-in member marking a notice as seen by themselves — RLS only
@@ -1267,9 +1291,14 @@ function rowToOrderNote(row) {
     body: row.body,
     createdBy: row.created_by,
     createdAt: row.created_at,
+    hiddenAt: row.hidden_at,
+    hiddenBy: row.hidden_by,
+    hiddenReason: row.hidden_reason,
   }
 }
 
+// Staff only ever get non-hidden notes back (enforced by RLS); admins
+// get hidden ones too, marked so the UI can show them as hidden.
 export async function listOrderNotes({ shopifyOrderId, invoiceId } = {}) {
   let query = supabase.from('order_notes').select('*').order('created_at', { ascending: true })
   query = shopifyOrderId ? query.eq('shopify_order_id', shopifyOrderId) : query.eq('invoice_id', invoiceId)
@@ -1278,13 +1307,26 @@ export async function listOrderNotes({ shopifyOrderId, invoiceId } = {}) {
   return data.map(rowToOrderNote)
 }
 
-// Any signed-in team member — a permanent, append-only log entry on the
-// order. No edit, no delete, by design (not even for admins).
+// Any signed-in team member — a permanent log entry on the order. No
+// direct edit or delete for anyone; admins can hide one via hideOrderNote.
 export async function addOrderNote({ shopifyOrderId, invoiceId, body, member }) {
   const row = { body: clean(body), created_by: member.id }
   if (shopifyOrderId) row.shopify_order_id = shopifyOrderId
   else row.invoice_id = invoiceId
   const { data, error } = await supabase.from('order_notes').insert(row).select().single()
+  must(error)
+  return rowToOrderNote(data)
+}
+
+// Admin-only, via RPC. A reason is required, kept as the audit trail.
+export async function hideOrderNote(id, reason) {
+  const { data, error } = await supabase.rpc('hide_order_note', { p_note_id: id, p_reason: reason })
+  must(error)
+  return rowToOrderNote(data)
+}
+
+export async function unhideOrderNote(id) {
+  const { data, error } = await supabase.rpc('unhide_order_note', { p_note_id: id })
   must(error)
   return rowToOrderNote(data)
 }
