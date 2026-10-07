@@ -1,15 +1,18 @@
 import { NavLink } from 'react-router-dom'
-import { HomeIcon, BoxIcon, ScanIcon, ClipboardIcon, TruckIcon } from './icons.jsx'
+import { HomeIcon, ClipboardIcon, BoxIcon, BellIcon, MoreIcon } from './icons.jsx'
 
-// Same 5 items as before Stage 2a — navigation content/structure is a
-// Stage 2b decision, not a design-system one. Only the visual treatment
-// (floating pill, per the approved Direction B) changes here.
+// Stage 2b nav restructuring: Orders merges Shopify + Direct (see
+// OrdersHub), Stock hosts Products/Stock In-Out/Purchase Orders/Suppliers
+// (see StockHub), and More replaces the old footer link row (see More.jsx).
+// Team Board stays a top-level tab — it already degrades gracefully when
+// the Team Board tables don't exist yet (TeamNoticeBoard.jsx shows a
+// friendly empty state, never a spinner or raw error).
 const TABS = [
   { to: '/', label: 'Home', icon: HomeIcon, end: true },
-  { to: '/products', label: 'Products', icon: BoxIcon },
-  { to: '/scan', label: 'Scan', icon: ScanIcon },
-  { to: '/purchase-orders', label: 'Orders', icon: ClipboardIcon },
-  { to: '/suppliers', label: 'Suppliers', icon: TruckIcon },
+  { to: '/orders', label: 'Orders', icon: ClipboardIcon },
+  { to: '/stock', label: 'Stock', icon: BoxIcon },
+  { to: '/team-board', label: 'Team', icon: BellIcon },
+  { to: '/more', label: 'More', icon: MoreIcon },
 ]
 
 export default function BottomNav() {

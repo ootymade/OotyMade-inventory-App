@@ -437,12 +437,14 @@ export async function getDashboardStats() {
   const totalProducts = products.length
   const totalStockValue = products.reduce((s, p) => s + p.quantity * (p.unitCost || 0), 0)
   const lowStock = products.filter((p) => p.hasBeenCounted && p.quantity <= p.lowStockThreshold)
+  const productNames = {}
+  products.forEach((p) => (productNames[p.id] = p.name))
   return {
     totalProducts,
     totalStockValue,
     lowStockCount: lowStock.length,
     lowStockProducts: lowStock,
-    recentActivity,
+    recentActivity: recentActivity.map((m) => ({ ...m, productName: productNames[m.productId] })),
   }
 }
 
@@ -819,6 +821,82 @@ export async function getTodayOrderSummary() {
   counts.forEach((c) => (byChannel[c.channel] = c.orderCount))
   const total = counts.reduce((s, c) => s + c.orderCount, 0)
   return { date: today, total, byChannel }
+}
+
+// ---------------------------------------------------------------------------
+// Home screen summary — composes existing reads into what the Home screen
+// needs ("today's work" counts, low stock, recent activity, today's orders
+// by channel, the pinned announcement if any). No new tables and no new
+// RLS — every query here is one an existing screen already makes; this just
+// aggregates them. Uses allSettled so one piece failing — most notably
+// team_notices, whose SQL may not be applied yet — never breaks the rest
+// of Home.
+// ---------------------------------------------------------------------------
+export async function getHomeSummary() {
+  const [shopifyR, invoicesR, statsR, todayR, noticeR, poR] = await Promise.allSettled([
+    listShopifyOrders(),
+    listInvoices(),
+    getDashboardStats(),
+    getTodayOrderSummary(),
+    listNotices(),
+    listPurchaseOrders(),
+  ])
+
+  const shopify = shopifyR.status === 'fulfilled' ? shopifyR.value : []
+  const invoices = invoicesR.status === 'fulfilled' ? invoicesR.value : []
+  const stats =
+    statsR.status === 'fulfilled'
+      ? statsR.value
+      : { totalProducts: 0, totalStockValue: 0, lowStockCount: 0, lowStockProducts: [], recentActivity: [] }
+  const todaySummary = todayR.status === 'fulfilled' ? todayR.value : { date: '', total: 0, byChannel: {} }
+  const notices = noticeR.status === 'fulfilled' ? noticeR.value : []
+  const purchaseOrders = poR.status === 'fulfilled' ? poR.value : []
+
+  const now = Date.now()
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const isToday = (iso) => Boolean(iso) && iso.slice(0, 10) === todayStr
+  const olderThanADay = (iso) => Boolean(iso) && now - new Date(iso).getTime() > DAY_MS
+
+  const toPack =
+    shopify.filter((o) => ['new', 'packing'].includes(o.workflowStatus)).length +
+    invoices.filter((i) => i.status === 'confirmed').length
+
+  const dispatchedToday =
+    shopify.filter((o) => o.workflowStatus === 'shipped' && isToday(o.workflowUpdatedAt)).length +
+    invoices.filter((i) => i.status === 'shipped' && isToday(i.updatedAt)).length
+
+  const waitingOver24h =
+    shopify.filter((o) => ['new', 'packing', 'packed'].includes(o.workflowStatus) && olderThanADay(o.createdAt)).length +
+    invoices.filter((i) => i.status === 'confirmed' && olderThanADay(i.createdAt)).length
+
+  const paymentHoldCount = shopify.filter((o) => o.paymentHold).length
+  const pendingPurchaseOrders = purchaseOrders.filter((po) => po.status !== 'received').length
+  const pinnedNotice = notices.find((n) => n.pinned && !n.hiddenAt) || null
+
+  // Admin-only figure (Staff never see a number here: shopify.totalPrice is
+  // already null at the database view level for Staff, so this just adds
+  // nulls as 0 for them — the UI never renders this card for Staff anyway).
+  const todayRevenue =
+    shopify.filter((o) => isToday(o.createdAt)).reduce((sum, o) => sum + (o.totalPrice || 0), 0) +
+    invoices.filter((i) => isToday(i.createdAt)).reduce((sum, i) => sum + (i.total || 0), 0)
+
+  return {
+    toPack,
+    dispatchedToday,
+    waitingOver24h,
+    paymentHoldCount,
+    pendingPurchaseOrders,
+    pinnedNotice,
+    todayRevenue,
+    totalProducts: stats.totalProducts,
+    totalStockValue: stats.totalStockValue,
+    lowStockCount: stats.lowStockCount,
+    lowStockProducts: stats.lowStockProducts.slice(0, 5),
+    recentActivity: stats.recentActivity.slice(0, 5),
+    todayByChannel: todaySummary.byChannel,
+    todayTotal: todaySummary.total,
+  }
 }
 
 // ---------------------------------------------------------------------------

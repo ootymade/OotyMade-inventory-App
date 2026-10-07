@@ -44,7 +44,11 @@ function timeAgo(iso) {
   return `${Math.round(hours / 24)}d ago`
 }
 
-export default function ShopifyOrderList() {
+// `embedded`: used when this list is shown as one tab of the Orders hub
+// (/orders) instead of its own standalone route — skips the page header
+// (the hub supplies one shared header above both tabs) but keeps the
+// refresh / SKU-mapping actions, just moved inline.
+export default function ShopifyOrderList({ embedded = false }) {
   const { push } = useToast()
   const { member } = useTeamMember()
   const [params, setParams] = useSearchParams()
@@ -144,24 +148,39 @@ export default function ShopifyOrderList() {
 
   return (
     <div>
-      <PageHeader
-        title="Shopify Orders"
-        subtitle={orders ? `${orders.length} order${orders.length === 1 ? '' : 's'}` : undefined}
-        right={
-          <div className="flex items-center gap-1">
-            <AdminOnly>
-              <Link to="/shopify-sku-mapping">
-                <Button size="sm" className="!px-3" variant="ghost" aria-label="Map SKUs">
-                  <EditIcon className="h-5 w-5" />
-                </Button>
-              </Link>
-            </AdminOnly>
-            <Button size="sm" className="!px-3" variant="ghost" onClick={() => refresh(false)} disabled={refreshing}>
-              {refreshing ? <Spinner className="h-4 w-4" /> : <SyncIcon className="h-5 w-5" />}
-            </Button>
-          </div>
-        }
-      />
+      {embedded ? (
+        <div className="flex items-center justify-end gap-1 px-4 pt-3">
+          <AdminOnly>
+            <Link to="/shopify-sku-mapping">
+              <Button size="sm" className="!px-3" variant="ghost" aria-label="Map SKUs">
+                <EditIcon className="h-5 w-5" />
+              </Button>
+            </Link>
+          </AdminOnly>
+          <Button size="sm" className="!px-3" variant="ghost" onClick={() => refresh(false)} disabled={refreshing}>
+            {refreshing ? <Spinner className="h-4 w-4" /> : <SyncIcon className="h-5 w-5" />}
+          </Button>
+        </div>
+      ) : (
+        <PageHeader
+          title="Shopify Orders"
+          subtitle={orders ? `${orders.length} order${orders.length === 1 ? '' : 's'}` : undefined}
+          right={
+            <div className="flex items-center gap-1">
+              <AdminOnly>
+                <Link to="/shopify-sku-mapping">
+                  <Button size="sm" className="!px-3" variant="ghost" aria-label="Map SKUs">
+                    <EditIcon className="h-5 w-5" />
+                  </Button>
+                </Link>
+              </AdminOnly>
+              <Button size="sm" className="!px-3" variant="ghost" onClick={() => refresh(false)} disabled={refreshing}>
+                {refreshing ? <Spinner className="h-4 w-4" /> : <SyncIcon className="h-5 w-5" />}
+              </Button>
+            </div>
+          }
+        />
+      )}
 
       <AdminOnly>
         <div className="px-4 pt-2">

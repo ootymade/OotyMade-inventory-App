@@ -21,12 +21,15 @@ import ChangePassword from './screens/settings/ChangePassword.jsx'
 import DirectOrderList from './screens/orders/DirectOrderList.jsx'
 import DirectOrderForm from './screens/orders/DirectOrderForm.jsx'
 import DirectOrderDetail from './screens/orders/DirectOrderDetail.jsx'
+import OrdersHub from './screens/orders/OrdersHub.jsx'
 import DailyOrders from './screens/daily/DailyOrders.jsx'
 import ShopifyOrderList from './screens/shopify/ShopifyOrderList.jsx'
 import ShopifyOrderDetail from './screens/shopify/ShopifyOrderDetail.jsx'
 import ShopifySkuMapping from './screens/shopify/ShopifySkuMapping.jsx'
 import CourierSettings from './screens/settings/CourierSettings.jsx'
 import TeamNoticeBoard from './screens/notices/TeamNoticeBoard.jsx'
+import StockHub from './screens/stock/StockHub.jsx'
+import More from './screens/more/More.jsx'
 import ComponentGallery from './screens/dev/ComponentGallery.jsx'
 import { Spinner } from './components/ui.jsx'
 
@@ -58,34 +61,39 @@ function AppShell() {
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL}>
       <div className="min-h-screen bg-slate-50 pb-[var(--nav-footprint)]">
-        <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/products" element={<ProductList />} />
-          <Route path="/products/new" element={<ProductForm />} />
-          <Route path="/products/:id" element={<ProductDetail />} />
-          <Route path="/products/:id/edit" element={<ProductForm />} />
-          <Route path="/stock-move" element={<StockMove />} />
-          <Route path="/scan" element={<Scan />} />
-          <Route path="/purchase-orders" element={<POList />} />
-          <Route path="/purchase-orders/new" element={<POForm />} />
-          <Route path="/purchase-orders/:id" element={<PODetail />} />
-          <Route path="/suppliers" element={<SupplierList />} />
-          <Route path="/suppliers/new" element={<SupplierForm />} />
-          <Route path="/suppliers/:id" element={<SupplierDetail />} />
-          <Route path="/suppliers/:id/edit" element={<SupplierForm />} />
-          <Route path="/data-sync" element={<DataSync />} />
-          <Route path="/change-password" element={<ChangePassword />} />
-          <Route path="/direct-orders" element={<DirectOrderList />} />
-          <Route path="/direct-orders/new" element={<DirectOrderForm />} />
-          <Route path="/direct-orders/:id" element={<DirectOrderDetail />} />
-          <Route path="/daily-orders" element={<DailyOrders />} />
-          <Route path="/shopify-orders" element={<ShopifyOrderList />} />
-          <Route path="/shopify-orders/:id" element={<ShopifyOrderDetail />} />
-          <Route path="/shopify-sku-mapping" element={<ShopifySkuMapping />} />
-          <Route path="/courier-settings" element={<CourierSettings />} />
-          <Route path="/team-board" element={<TeamNoticeBoard />} />
-          <Route path="/component-gallery" element={<ComponentGallery />} />
-        </Routes>
+        <div className="mx-auto max-w-2xl lg:max-w-4xl">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/orders" element={<OrdersHub />} />
+            <Route path="/stock" element={<StockHub />} />
+            <Route path="/more" element={<More />} />
+            <Route path="/products" element={<ProductList />} />
+            <Route path="/products/new" element={<ProductForm />} />
+            <Route path="/products/:id" element={<ProductDetail />} />
+            <Route path="/products/:id/edit" element={<ProductForm />} />
+            <Route path="/stock-move" element={<StockMove />} />
+            <Route path="/scan" element={<Scan />} />
+            <Route path="/purchase-orders" element={<POList />} />
+            <Route path="/purchase-orders/new" element={<POForm />} />
+            <Route path="/purchase-orders/:id" element={<PODetail />} />
+            <Route path="/suppliers" element={<SupplierList />} />
+            <Route path="/suppliers/new" element={<SupplierForm />} />
+            <Route path="/suppliers/:id" element={<SupplierDetail />} />
+            <Route path="/suppliers/:id/edit" element={<SupplierForm />} />
+            <Route path="/data-sync" element={<DataSync />} />
+            <Route path="/change-password" element={<ChangePassword />} />
+            <Route path="/direct-orders" element={<DirectOrderList />} />
+            <Route path="/direct-orders/new" element={<DirectOrderForm />} />
+            <Route path="/direct-orders/:id" element={<DirectOrderDetail />} />
+            <Route path="/daily-orders" element={<DailyOrders />} />
+            <Route path="/shopify-orders" element={<ShopifyOrderList />} />
+            <Route path="/shopify-orders/:id" element={<ShopifyOrderDetail />} />
+            <Route path="/shopify-sku-mapping" element={<ShopifySkuMapping />} />
+            <Route path="/courier-settings" element={<CourierSettings />} />
+            <Route path="/team-board" element={<TeamNoticeBoard />} />
+            <Route path="/component-gallery" element={<ComponentGallery />} />
+          </Routes>
+        </div>
       </div>
       <BottomNav />
     </BrowserRouter>

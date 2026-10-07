@@ -11,7 +11,11 @@ function formatDate(iso) {
   return new Date(iso).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })
 }
 
-export default function DirectOrderList() {
+// `embedded`: used when this list is shown as one tab of the Orders hub
+// (/orders) instead of its own standalone route — skips the page header
+// (the hub supplies one shared header above both tabs) but keeps the
+// "New" action, just moved inline.
+export default function DirectOrderList({ embedded = false }) {
   const [search, setSearch] = useState('')
   const [orders, setOrders] = useState(null)
 
@@ -26,17 +30,27 @@ export default function DirectOrderList() {
 
   return (
     <div>
-      <PageHeader
-        title="Direct orders"
-        subtitle={orders ? `${orders.length} order${orders.length === 1 ? '' : 's'}` : undefined}
-        right={
+      {embedded ? (
+        <div className="flex justify-end px-4 pt-3">
           <Link to="/direct-orders/new">
             <Button size="sm" className="!px-3">
               <PlusIcon className="h-4 w-4" /> New
             </Button>
           </Link>
-        }
-      />
+        </div>
+      ) : (
+        <PageHeader
+          title="Direct orders"
+          subtitle={orders ? `${orders.length} order${orders.length === 1 ? '' : 's'}` : undefined}
+          right={
+            <Link to="/direct-orders/new">
+              <Button size="sm" className="!px-3">
+                <PlusIcon className="h-4 w-4" /> New
+              </Button>
+            </Link>
+          }
+        />
+      )}
 
       <div className="px-4 pt-3">
         <SearchBox
