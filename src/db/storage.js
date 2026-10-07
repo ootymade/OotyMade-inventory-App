@@ -925,6 +925,7 @@ function rowToCourier(row) {
     name: row.name,
     trackingUrlTemplate: row.tracking_url_template || '',
     isDeepLink: row.is_deep_link,
+    useUniversalTracker: row.use_universal_tracker,
     sortOrder: row.sort_order,
   }
 }
@@ -936,11 +937,12 @@ export async function listCouriers() {
 }
 
 // Admin-only — enforced by RLS on the couriers table itself, not just the UI.
-export async function saveCourier({ id, name, trackingUrlTemplate, isDeepLink, sortOrder }) {
+export async function saveCourier({ id, name, trackingUrlTemplate, isDeepLink, useUniversalTracker, sortOrder }) {
   const row = {
     name: clean(name),
     tracking_url_template: clean(trackingUrlTemplate) || null,
     is_deep_link: !!isDeepLink,
+    use_universal_tracker: !!useUniversalTracker,
     sort_order: Number(sortOrder) || 0,
   }
   const query = id ? supabase.from('couriers').update(row).eq('id', id) : supabase.from('couriers').insert(row)
@@ -983,15 +985,28 @@ export async function setShipment({ shopifyOrderId, invoiceId, courierName, trac
   return rowToShipment(data)
 }
 
+// Generic multi-courier tracker — not a verified per-courier deep link, just
+// a fallback a courier can be opted into (admin decides per courier, off by
+// default) when its own tracking page has no reliable number-embedding format.
+const UNIVERSAL_TRACKER_TEMPLATE = 'https://t.17track.net/en#nums={tracking_number}'
+
 // Resolves a courier name against the admin-managed list to build a
-// tracking link. Returns null for "Other"/unrecognized couriers — the
-// Track button is simply omitted in that case, never a broken link.
+// tracking link. Preference order: the courier's own verified deep link
+// (embeds the number) > the universal tracker, if the admin opted this
+// courier into it > the courier's general tracking page, just as a place
+// to click through to (no number embedded, but never wrong since it
+// embeds nothing). Returns null for "Other"/unrecognized couriers or one
+// with no URL at all.
 export function buildTrackingUrl(courierName, trackingNumber, couriers) {
   const courier = couriers.find((c) => c.name.toLowerCase() === (courierName || '').toLowerCase())
-  if (!courier || !courier.trackingUrlTemplate) return null
-  return courier.isDeepLink
-    ? courier.trackingUrlTemplate.replace('{tracking_number}', encodeURIComponent(trackingNumber))
-    : courier.trackingUrlTemplate
+  if (!courier) return null
+  if (courier.isDeepLink && courier.trackingUrlTemplate) {
+    return courier.trackingUrlTemplate.replace('{tracking_number}', encodeURIComponent(trackingNumber))
+  }
+  if (courier.useUniversalTracker) {
+    return UNIVERSAL_TRACKER_TEMPLATE.replace('{tracking_number}', encodeURIComponent(trackingNumber))
+  }
+  return courier.trackingUrlTemplate || null
 }
 
 export function buildWhatsAppShipmentMessage({ customerName, orderNumber, courierName, trackingNumber, trackingUrl }) {

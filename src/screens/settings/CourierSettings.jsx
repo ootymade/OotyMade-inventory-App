@@ -5,7 +5,7 @@ import { useToast } from '../../context/ToastContext.jsx'
 import { PageHeader, Card, Button, Input, Field, Spinner, EmptyState } from '../../components/ui.jsx'
 import { TrashIcon } from '../../components/icons.jsx'
 
-const BLANK = { name: '', trackingUrlTemplate: '', isDeepLink: false, sortOrder: 0 }
+const BLANK = { name: '', trackingUrlTemplate: '', isDeepLink: false, useUniversalTracker: false, sortOrder: 0 }
 
 export default function CourierSettings() {
   const { member } = useTeamMember()
@@ -34,7 +34,14 @@ export default function CourierSettings() {
   const edit = (courier) =>
     setForm(
       courier
-        ? { id: courier.id, name: courier.name, trackingUrlTemplate: courier.trackingUrlTemplate, isDeepLink: courier.isDeepLink, sortOrder: courier.sortOrder }
+        ? {
+            id: courier.id,
+            name: courier.name,
+            trackingUrlTemplate: courier.trackingUrlTemplate,
+            isDeepLink: courier.isDeepLink,
+            useUniversalTracker: courier.useUniversalTracker,
+            sortOrder: courier.sortOrder,
+          }
         : BLANK,
     )
 
@@ -98,6 +105,14 @@ export default function CourierSettings() {
           />
           URL embeds the tracking number (deep link)
         </label>
+        <label className="flex items-center gap-2 text-sm text-slate-600">
+          <input
+            type="checkbox"
+            checked={form.useUniversalTracker}
+            onChange={(e) => setForm((f) => ({ ...f, useUniversalTracker: e.target.checked }))}
+          />
+          Use universal tracker (17TRACK) as a fallback for this courier
+        </label>
         <Field label="Sort order">
           <Input
             type="number"
@@ -129,6 +144,7 @@ export default function CourierSettings() {
                   <p className="truncate font-medium text-slate-700">{c.name}</p>
                   <p className="truncate text-xs text-slate-400">
                     {c.isDeepLink ? 'Deep link' : 'General page only'} · {c.trackingUrlTemplate || 'no URL set'}
+                    {c.useUniversalTracker ? ' · 17TRACK fallback on' : ''}
                   </p>
                 </button>
                 <button onClick={() => remove(c.id)} aria-label={`Remove ${c.name}`}>
