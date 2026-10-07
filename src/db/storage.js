@@ -1176,3 +1176,115 @@ export async function getShopifySyncPing() {
   must(error)
   return data?.last_synced_at
 }
+
+// ---------------------------------------------------------------------------
+// Team Notice Board — Stage A: announcements + order notes. No chat, no
+// photos, no push yet (later stages). Admin-only posting/pinning is
+// enforced by RLS on team_notices itself, not just hidden in the UI.
+// ---------------------------------------------------------------------------
+
+function rowToNotice(row) {
+  return {
+    id: row.id,
+    body: row.body,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+    pinned: row.pinned,
+    pinnedAt: row.pinned_at,
+    pinnedBy: row.pinned_by,
+    updatedAt: row.updated_at,
+  }
+}
+
+export async function listNotices() {
+  const { data, error } = await supabase
+    .from('team_notices')
+    .select('*')
+    .order('pinned', { ascending: false })
+    .order('created_at', { ascending: false })
+  must(error)
+  return data.map(rowToNotice)
+}
+
+// Admin-only — enforced by RLS on team_notices itself.
+export async function createNotice(body, member) {
+  const { error } = await supabase.from('team_notices').insert({ body: clean(body), created_by: member.id })
+  must(error)
+}
+
+// Admin-only — enforced by RLS. Toggles pinned on/off.
+export async function setNoticePinned(id, pinned, member) {
+  const { error } = await supabase
+    .from('team_notices')
+    .update({
+      pinned,
+      pinned_at: pinned ? new Date().toISOString() : null,
+      pinned_by: pinned ? member.id : null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+  must(error)
+}
+
+// Any signed-in member marking a notice as seen by themselves — RLS only
+// allows team_member_id = the caller's own id. Safe to call repeatedly.
+export async function markNoticeSeen(noticeId, memberId) {
+  const { error } = await supabase
+    .from('team_notice_seen')
+    .upsert({ notice_id: noticeId, team_member_id: memberId }, { onConflict: 'notice_id,team_member_id', ignoreDuplicates: true })
+  must(error)
+}
+
+// Everyone can see who has (and hasn't) seen a notice.
+export async function listNoticeSeenBy(noticeId) {
+  const { data, error } = await supabase
+    .from('team_notice_seen')
+    .select('team_member_id, seen_at, team_members(name)')
+    .eq('notice_id', noticeId)
+    .order('seen_at')
+  must(error)
+  return data.map((row) => ({ memberId: row.team_member_id, name: row.team_members?.name || 'Unknown', seenAt: row.seen_at }))
+}
+
+// How many of the current notices this member hasn't opened yet — shown
+// as a badge on the dashboard link, computed client-side from the two
+// small lists rather than a dedicated RPC.
+export async function getUnseenNoticeCount(memberId) {
+  const [notices, { data: seenRows, error }] = await Promise.all([
+    listNotices(),
+    supabase.from('team_notice_seen').select('notice_id').eq('team_member_id', memberId),
+  ])
+  must(error)
+  const seenIds = new Set((seenRows || []).map((r) => r.notice_id))
+  return notices.filter((n) => !seenIds.has(n.id)).length
+}
+
+function rowToOrderNote(row) {
+  return {
+    id: row.id,
+    shopifyOrderId: row.shopify_order_id,
+    invoiceId: row.invoice_id,
+    body: row.body,
+    createdBy: row.created_by,
+    createdAt: row.created_at,
+  }
+}
+
+export async function listOrderNotes({ shopifyOrderId, invoiceId } = {}) {
+  let query = supabase.from('order_notes').select('*').order('created_at', { ascending: true })
+  query = shopifyOrderId ? query.eq('shopify_order_id', shopifyOrderId) : query.eq('invoice_id', invoiceId)
+  const { data, error } = await query
+  must(error)
+  return data.map(rowToOrderNote)
+}
+
+// Any signed-in team member — a permanent, append-only log entry on the
+// order. No edit, no delete, by design (not even for admins).
+export async function addOrderNote({ shopifyOrderId, invoiceId, body, member }) {
+  const row = { body: clean(body), created_by: member.id }
+  if (shopifyOrderId) row.shopify_order_id = shopifyOrderId
+  else row.invoice_id = invoiceId
+  const { data, error } = await supabase.from('order_notes').insert(row).select().single()
+  must(error)
+  return rowToOrderNote(data)
+}

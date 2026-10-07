@@ -26,6 +26,7 @@ import ShopifyOrderList from './screens/shopify/ShopifyOrderList.jsx'
 import ShopifyOrderDetail from './screens/shopify/ShopifyOrderDetail.jsx'
 import ShopifySkuMapping from './screens/shopify/ShopifySkuMapping.jsx'
 import CourierSettings from './screens/settings/CourierSettings.jsx'
+import TeamNoticeBoard from './screens/notices/TeamNoticeBoard.jsx'
 import { Spinner } from './components/ui.jsx'
 
 function AppShell() {
@@ -81,6 +82,7 @@ function AppShell() {
           <Route path="/shopify-orders/:id" element={<ShopifyOrderDetail />} />
           <Route path="/shopify-sku-mapping" element={<ShopifySkuMapping />} />
           <Route path="/courier-settings" element={<CourierSettings />} />
+          <Route path="/team-board" element={<TeamNoticeBoard />} />
         </Routes>
       </div>
       <BottomNav />

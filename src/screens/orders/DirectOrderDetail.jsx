@@ -17,6 +17,7 @@ import { useToast } from '../../context/ToastContext.jsx'
 import { downloadInvoicePdf, invoicePdfBlob, invoiceFilename } from '../../lib/invoicePdf.js'
 import { PageHeader, Card, Badge, Button, Input, Select, Field, Spinner, EmptyState } from '../../components/ui.jsx'
 import { DownloadIcon, TrashIcon, PackageCheckIcon } from '../../components/icons.jsx'
+import OrderNotes from '../../components/OrderNotes.jsx'
 
 const OTHER_COURIER = '__other__'
 
@@ -347,6 +348,8 @@ export default function DirectOrderDetail() {
             </Button>
           </div>
         )}
+
+        <OrderNotes invoiceId={id} />
       </div>
     </div>
   )

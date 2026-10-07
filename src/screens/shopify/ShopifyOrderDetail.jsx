@@ -18,6 +18,7 @@ import { useTeamMember } from '../../context/TeamMemberContext.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
 import { PageHeader, Card, Badge, Button, Input, Select, Spinner, EmptyState } from '../../components/ui.jsx'
 import { ShoppingBagIcon } from '../../components/icons.jsx'
+import OrderNotes from '../../components/OrderNotes.jsx'
 
 const OTHER_COURIER = '__other__'
 
@@ -360,6 +361,8 @@ export default function ShopifyOrderDetail() {
           {order.note}
         </Card>
       )}
+
+      <OrderNotes shopifyOrderId={id} />
     </div>
   )
 }

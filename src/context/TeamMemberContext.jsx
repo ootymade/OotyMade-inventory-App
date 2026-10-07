@@ -4,8 +4,10 @@ import { supabase } from '../db/supabaseClient.js'
 const TeamMemberContext = createContext(null)
 
 // member: undefined = looking up, null = signed in but no team_members row
-// (shouldn't happen for the 6 seeded accounts), otherwise { name, role,
-// isAdmin }. `role` here is the descriptive title (e.g. "Director") used
+// (shouldn't happen for the 6 seeded accounts), otherwise { id, name, role,
+// isAdmin }. `id` is the team_members row id (= auth.uid()), needed for
+// writes where RLS checks the row's own created_by/team_member_id against
+// the caller. `role` here is the descriptive title (e.g. "Director") used
 // for movement/invoice attribution, same as before individual logins —
 // it's sourced from team_members.title, NOT team_members.role, which is
 // the separate admin/staff access level (team_members.role) used only for
@@ -23,7 +25,7 @@ export function TeamMemberProvider({ session, children }) {
       .maybeSingle()
       .then(({ data }) => {
         if (!cancelled) {
-          setMember(data ? { name: data.name, role: data.title, isAdmin: data.role === 'admin' } : null)
+          setMember(data ? { id: session.user.id, name: data.name, role: data.title, isAdmin: data.role === 'admin' } : null)
         }
       })
     return () => {

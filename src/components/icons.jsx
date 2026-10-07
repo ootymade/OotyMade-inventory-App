@@ -178,3 +178,16 @@ export const ShoppingBagIcon = (props) => (
     <path d="M9 8V6a3 3 0 0 1 6 0v2" />
   </svg>
 )
+
+export const BellIcon = (props) => (
+  <svg {...base} {...props}>
+    <path d="M6 10a6 6 0 1 1 12 0c0 3 1 5 2 6H4c1-1 2-3 2-6z" />
+    <path d="M10 19a2 2 0 0 0 4 0" />
+  </svg>
+)
+
+export const PinIcon = (props) => (
+  <svg {...base} {...props}>
+    <path d="M12 2l2 6 6 2-6 2-2 6-2-6-6-2 6-2 2-6z" />
+  </svg>
+)

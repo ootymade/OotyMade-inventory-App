@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { getDashboardStats, listProducts, getTodayOrderSummary } from '../db/storage.js'
+import { getDashboardStats, listProducts, getTodayOrderSummary, getUnseenNoticeCount } from '../db/storage.js'
 import { useRealtimeRefresh } from '../db/useRealtimeRefresh.js'
 import { useTeamMember } from '../context/TeamMemberContext.jsx'
 import { Card, Badge, Button, EmptyState } from '../components/ui.jsx'
@@ -14,6 +14,7 @@ import {
   SyncIcon,
   ReceiptIcon,
   ShoppingBagIcon,
+  BellIcon,
 } from '../components/icons.jsx'
 
 const REALTIME_TABLES = ['products', 'movements', 'purchase_orders', 'invoices', 'daily_order_counts']
@@ -49,6 +50,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState(null)
   const [products, setProducts] = useState(null)
   const [orderSummary, setOrderSummary] = useState(null)
+  const [unseenNotices, setUnseenNotices] = useState(0)
 
   const load = useCallback(async () => {
     const [s, all, summary] = await Promise.all([getDashboardStats(), listProducts(), getTodayOrderSummary()])
@@ -56,6 +58,10 @@ export default function Dashboard() {
     setProducts(all)
     setOrderSummary(summary)
   }, [])
+
+  useEffect(() => {
+    if (member?.id) getUnseenNoticeCount(member.id).then(setUnseenNotices)
+  }, [member?.id])
 
   useEffect(() => {
     load()
@@ -94,6 +100,18 @@ export default function Dashboard() {
             <h1 className="text-xl font-bold">Inventory Overview</h1>
           </div>
           <div className="flex items-center gap-2">
+            <Link
+              to="/team-board"
+              className="tap relative flex h-10 w-10 items-center justify-center rounded-full bg-white/10"
+              aria-label="Team board"
+            >
+              <BellIcon className="h-5 w-5" />
+              {unseenNotices > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-danger-600 text-[10px] font-bold text-white">
+                  {unseenNotices > 9 ? '9+' : unseenNotices}
+                </span>
+              )}
+            </Link>
             <Link
               to="/data-sync"
               className="tap flex h-10 w-10 items-center justify-center rounded-full bg-white/10"
