@@ -1,12 +1,39 @@
 @import "tailwindcss";
 
+/* ============================================================
+   Design system — Direction B ("Soft"), approved for Stage 2a.
+   Two token groups below are deliberately swappable:
+   1. --color-slate-*  — the neutral scale. Direction B uses a warm
+      "stone" neutral instead of Tailwind's default cool slate. Every
+      existing `slate-*` class across the app picks this up automatically
+      with no per-screen edit, since these are Tailwind's own color
+      tokens being overridden, not a parallel system.
+   2. --color-brand-*  — the ONE accent color. Still not decided as a
+      real brand color; this is the emerald placeholder from the
+      Direction B preview. Swapping brand colors later is an edit to
+      just these lines — every `brand-*` class in the app follows.
+   ============================================================ */
 @theme {
-  --color-brand-50: #eff6ff;
-  --color-brand-100: #dbeafe;
-  --color-brand-400: #38bdf8;
-  --color-brand-500: #0ea5e9;
-  --color-brand-600: #0284c7;
-  --color-brand-900: #0f172a;
+  /* Neutral scale (overrides Tailwind's built-in slate with a warm stone) */
+  --color-slate-50: #fafaf9;
+  --color-slate-100: #f5f5f4;
+  --color-slate-200: #e7e5e4;
+  --color-slate-300: #d6d3d1;
+  --color-slate-400: #a8a29e;
+  --color-slate-500: #78716c;
+  --color-slate-600: #57534e;
+  --color-slate-700: #44403c;
+  --color-slate-800: #292524;
+  --color-slate-900: #1c1917;
+
+  /* Accent — placeholder emerald, swappable (see note above) */
+  --color-brand-50: #ecfdf5;
+  --color-brand-100: #d1fae5;
+  --color-brand-400: #34d399;
+  --color-brand-500: #059669;
+  --color-brand-600: #047857;
+  --color-brand-700: #065f46;
+  --color-brand-900: #064e3b;
 
   --color-danger-50: #fef2f2;
   --color-danger-500: #ef4444;
@@ -25,6 +52,15 @@
 
 :root {
   color-scheme: light;
+  /* Single source of truth for the floating bottom nav's footprint, so
+     the nav itself and every page's bottom padding can never drift out
+     of sync — see BottomNav.jsx and the AppShell wrapper in App.jsx. */
+  --nav-footprint: calc(86px + env(safe-area-inset-bottom));
+
+  /* Radius scale, matching the approved Direction B preview exactly. */
+  --radius-sm: 14px;
+  --radius-md: 20px;
+  --radius-lg: 26px;
 }
 
 html,
@@ -55,14 +91,25 @@ button {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-/* Minimum tap target */
+/* Minimum tap target — raised from 44px to the 48px quality bar */
 .tap {
-  min-height: 44px;
-  min-width: 44px;
+  min-height: 48px;
+  min-width: 48px;
 }
 
 ::-webkit-scrollbar {
   display: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 @media print {

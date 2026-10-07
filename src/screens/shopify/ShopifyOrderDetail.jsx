@@ -16,7 +16,7 @@ import {
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
-import { PageHeader, Card, Badge, Button, Input, Select, Spinner, EmptyState } from '../../components/ui.jsx'
+import { PageHeader, Card, Badge, StatusBadge, AdminOnly, Button, Input, Select, Spinner, EmptyState } from '../../components/ui.jsx'
 import { ShoppingBagIcon } from '../../components/icons.jsx'
 import OrderNotes from '../../components/OrderNotes.jsx'
 
@@ -177,7 +177,7 @@ export default function ShopifyOrderDetail() {
 
       <Card className="space-y-2">
         <div className="flex items-center justify-between">
-          <Badge>{WORKFLOW_LABELS[order.workflowStatus] || order.workflowStatus}</Badge>
+          <StatusBadge kind="shopify" value={order.workflowStatus} />
           <Badge tone="brand">{(order.fulfillmentStatus || '').replace(/_/g, ' ').toLowerCase() || 'unknown'}</Badge>
         </div>
         <p className="text-xs text-slate-400">Placed {formatDate(order.createdAt)}</p>
@@ -189,8 +189,10 @@ export default function ShopifyOrderDetail() {
         )}
         {order.paymentHold && <p className="text-xs font-semibold text-danger-600">Payment issue — do not ship</p>}
         {order.cancelledAt && <p className="text-xs text-slate-400">Cancelled {formatDate(order.cancelledAt)}</p>}
-        {member?.isAdmin && order.financialStatus && !['PAID', 'AUTHORIZED', 'PARTIALLY_REFUNDED'].includes(order.financialStatus) && (
-          <p className="text-xs text-slate-400">Payment status: {order.financialStatus.toLowerCase()}</p>
+        {order.financialStatus && !['PAID', 'AUTHORIZED', 'PARTIALLY_REFUNDED'].includes(order.financialStatus) && (
+          <AdminOnly>
+            <p className="text-xs text-slate-400">Payment status: {order.financialStatus.toLowerCase()}</p>
+          </AdminOnly>
         )}
       </Card>
 

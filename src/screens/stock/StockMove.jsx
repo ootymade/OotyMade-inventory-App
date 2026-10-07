@@ -3,8 +3,13 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { adjustStock, getProduct, listProducts, getProductByCode } from '../../db/storage.js'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
-import { PageHeader, Card, Field, Input, Select, Textarea, Button, Spinner } from '../../components/ui.jsx'
-import { PlusIcon, MinusIcon, SearchIcon, ScanIcon, BoxIcon } from '../../components/icons.jsx'
+import { PageHeader, Card, Field, Input, Select, Textarea, Button, Spinner, SegmentedControl, SearchBox } from '../../components/ui.jsx'
+import { ScanIcon, BoxIcon } from '../../components/icons.jsx'
+
+const TYPE_OPTIONS = [
+  { value: 'in', label: 'Stock in' },
+  { value: 'out', label: 'Stock out' },
+]
 
 const REASONS = {
   in: [
@@ -104,26 +109,7 @@ export default function StockMove() {
       <PageHeader title="Stock movement" back />
 
       <div className="space-y-4 px-4 py-4">
-        <div className="grid grid-cols-2 gap-3">
-          <button
-            type="button"
-            onClick={() => setType('in')}
-            className={`tap flex items-center justify-center gap-2 rounded-xl py-3.5 font-semibold ${
-              type === 'in' ? 'bg-ok-600 text-white' : 'bg-white text-slate-500 ring-1 ring-slate-200'
-            }`}
-          >
-            <PlusIcon className="h-5 w-5" /> Stock in
-          </button>
-          <button
-            type="button"
-            onClick={() => setType('out')}
-            className={`tap flex items-center justify-center gap-2 rounded-xl py-3.5 font-semibold ${
-              type === 'out' ? 'bg-danger-600 text-white' : 'bg-white text-slate-500 ring-1 ring-slate-200'
-            }`}
-          >
-            <MinusIcon className="h-5 w-5" /> Stock out
-          </button>
-        </div>
+        <SegmentedControl options={TYPE_OPTIONS} value={type} onChange={setType} className="justify-center" />
 
         {loadingProduct ? (
           <div className="flex justify-center py-8">
@@ -151,16 +137,13 @@ export default function StockMove() {
         ) : (
           <div className="space-y-2">
             <div className="flex gap-2">
-              <div className="relative flex-1">
-                <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400" />
-                <Input
-                  autoFocus
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search product or SKU"
-                  className="pl-10"
-                />
-              </div>
+              <SearchBox
+                autoFocus
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search product or SKU"
+                className="flex-1"
+              />
               <Button type="button" variant="outline" size="icon" onClick={() => navigate('/scan?redirect=stock-move')}>
                 <ScanIcon className="h-5 w-5" />
               </Button>

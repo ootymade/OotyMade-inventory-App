@@ -8,7 +8,12 @@ import { SALES_CHANNELS } from '../../db/businessInfo.js'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
-import { PageHeader, Card, Input, Spinner } from '../../components/ui.jsx'
+import { PageHeader, Card, Input, Spinner, SegmentedControl } from '../../components/ui.jsx'
+
+const HISTORY_OPTIONS = [
+  { value: 30, label: '30d' },
+  { value: 90, label: '90d' },
+]
 import { ChevronRightIcon } from '../../components/icons.jsx'
 
 const REALTIME_TABLES = ['daily_order_counts']
@@ -151,17 +156,7 @@ export default function DailyOrders() {
         <div>
           <div className="mb-2 flex items-center justify-between">
             <p className="text-sm font-semibold text-slate-500">History</p>
-            <div className="flex gap-1.5">
-              {[30, 90].map((d) => (
-                <button
-                  key={d}
-                  onClick={() => setHistoryDays(d)}
-                  className={`tap rounded-full px-3 py-1 text-xs font-semibold ${historyDays === d ? 'bg-brand-600 text-white' : 'bg-white text-slate-500 ring-1 ring-slate-200'}`}
-                >
-                  {d}d
-                </button>
-              ))}
-            </div>
+            <SegmentedControl options={HISTORY_OPTIONS} value={historyDays} onChange={setHistoryDays} className="w-auto" />
           </div>
 
           {!history ? (

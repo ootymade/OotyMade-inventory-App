@@ -15,20 +15,11 @@ import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
 import { downloadInvoicePdf, invoicePdfBlob, invoiceFilename } from '../../lib/invoicePdf.js'
-import { PageHeader, Card, Badge, Button, Input, Select, Field, Spinner, EmptyState } from '../../components/ui.jsx'
+import { PageHeader, Card, StatusBadge, Button, Input, Select, Field, Spinner, EmptyState, getStatusMeta } from '../../components/ui.jsx'
 import { DownloadIcon, TrashIcon, PackageCheckIcon } from '../../components/icons.jsx'
 import OrderNotes from '../../components/OrderNotes.jsx'
 
 const OTHER_COURIER = '__other__'
-
-const STATUS_TONE = { draft: 'slate', confirmed: 'brand', shipped: 'warn', delivered: 'ok', cancelled: 'danger' }
-const STATUS_LABEL = {
-  draft: 'Proforma (draft)',
-  confirmed: 'Confirmed',
-  shipped: 'Shipped',
-  delivered: 'Delivered',
-  cancelled: 'Cancelled',
-}
 
 const REALTIME_TABLES = ['invoices', 'invoice_items']
 
@@ -165,7 +156,7 @@ export default function DirectOrderDetail() {
     setBusy(true)
     try {
       await updateShipment(id, { status })
-      push(`Marked as ${STATUS_LABEL[status].toLowerCase()}`, { tone: 'success' })
+      push(`Marked as ${getStatusMeta('direct', status).label.toLowerCase()}`, { tone: 'success' })
       await load()
     } finally {
       setBusy(false)
@@ -210,7 +201,7 @@ export default function DirectOrderDetail() {
 
       <div className="space-y-4 px-4 pt-4">
         <div className="flex items-center justify-between">
-          <Badge tone={STATUS_TONE[invoice.status]}>{STATUS_LABEL[invoice.status]}</Badge>
+          <StatusBadge kind="direct" value={invoice.status} />
           <span className="text-sm text-slate-400">
             {invoice.kind === 'gst' ? `INV-${invoice.invoiceNumber}` : 'Proforma'} · {formatDate(invoice.createdAt)}
           </span>

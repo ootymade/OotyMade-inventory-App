@@ -27,6 +27,7 @@ import ShopifyOrderDetail from './screens/shopify/ShopifyOrderDetail.jsx'
 import ShopifySkuMapping from './screens/shopify/ShopifySkuMapping.jsx'
 import CourierSettings from './screens/settings/CourierSettings.jsx'
 import TeamNoticeBoard from './screens/notices/TeamNoticeBoard.jsx'
+import ComponentGallery from './screens/dev/ComponentGallery.jsx'
 import { Spinner } from './components/ui.jsx'
 
 function AppShell() {
@@ -56,7 +57,7 @@ function AppShell() {
 
   return (
     <BrowserRouter basename={import.meta.env.BASE_URL}>
-      <div className="min-h-screen bg-slate-50 pb-[calc(64px+env(safe-area-inset-bottom))]">
+      <div className="min-h-screen bg-slate-50 pb-[var(--nav-footprint)]">
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/products" element={<ProductList />} />
@@ -83,6 +84,7 @@ function AppShell() {
           <Route path="/shopify-sku-mapping" element={<ShopifySkuMapping />} />
           <Route path="/courier-settings" element={<CourierSettings />} />
           <Route path="/team-board" element={<TeamNoticeBoard />} />
+          <Route path="/component-gallery" element={<ComponentGallery />} />
         </Routes>
       </div>
       <BottomNav />

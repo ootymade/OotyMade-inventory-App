@@ -11,23 +11,10 @@ import {
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
-import { PageHeader, Card, Badge, Button, Input, Spinner, EmptyState } from '../../components/ui.jsx'
+import { PageHeader, Card, Badge, StatusBadge, Button, Input, Spinner, EmptyState } from '../../components/ui.jsx'
 import { TrashIcon, PackageCheckIcon } from '../../components/icons.jsx'
 
 const REALTIME_TABLES = ['purchase_orders', 'products']
-
-const STATUS_TONE = {
-  draft: 'slate',
-  ordered: 'brand',
-  partially_received: 'warn',
-  received: 'ok',
-}
-const STATUS_LABEL = {
-  draft: 'Draft',
-  ordered: 'Ordered',
-  partially_received: 'Partially received',
-  received: 'Received',
-}
 
 export default function PODetail() {
   const { id } = useParams()
@@ -151,7 +138,7 @@ export default function PODetail() {
 
       <div className="space-y-4 px-4 pt-4">
         <div className="flex items-center justify-between">
-          <Badge tone={STATUS_TONE[po.status]}>{STATUS_LABEL[po.status]}</Badge>
+          <StatusBadge kind="po" value={po.status} />
           <span className="text-sm text-slate-400">
             {new Date(po.createdAt).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}
           </span>

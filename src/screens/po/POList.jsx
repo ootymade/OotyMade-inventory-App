@@ -2,24 +2,18 @@ import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { listPurchaseOrders, listSuppliers } from '../../db/storage.js'
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
-import { PageHeader, Badge, Button, EmptyState, Card } from '../../components/ui.jsx'
+import { PageHeader, StatusBadge, SegmentedControl, Button, EmptyState, Card, Skeleton, getStatusMeta } from '../../components/ui.jsx'
 import { PlusIcon, ClipboardIcon } from '../../components/icons.jsx'
 
 const REALTIME_TABLES = ['purchase_orders']
 
-const STATUS_TONE = {
-  draft: 'slate',
-  ordered: 'brand',
-  partially_received: 'warn',
-  received: 'ok',
-}
-const STATUS_LABEL = {
-  draft: 'Draft',
-  ordered: 'Ordered',
-  partially_received: 'Partially received',
-  received: 'Received',
-}
-const TABS = ['all', 'draft', 'ordered', 'partially_received', 'received']
+const TABS = [
+  { value: 'all', label: 'All' },
+  { value: 'draft', label: getStatusMeta('po', 'draft').label },
+  { value: 'ordered', label: getStatusMeta('po', 'ordered').label },
+  { value: 'partially_received', label: getStatusMeta('po', 'partially_received').label },
+  { value: 'received', label: getStatusMeta('po', 'received').label },
+]
 
 export default function POList() {
   const [params, setParams] = useSearchParams()
@@ -56,25 +50,19 @@ export default function POList() {
         }
       />
 
-      <div className="flex gap-2 overflow-x-auto px-4 pt-3 pb-1">
-        {TABS.map((t) => (
-          <button
-            key={t}
-            onClick={() => setParams(t === 'all' ? {} : { status: t }, { replace: true })}
-            className={`tap shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold ${
-              status === t ? 'bg-brand-600 text-white' : 'bg-white text-slate-500 ring-1 ring-slate-200'
-            }`}
-          >
-            {t === 'all' ? 'All' : STATUS_LABEL[t]}
-          </button>
-        ))}
+      <div className="px-4 pt-3 pb-1">
+        <SegmentedControl
+          options={TABS}
+          value={status}
+          onChange={(t) => setParams(t === 'all' ? {} : { status: t }, { replace: true })}
+        />
       </div>
 
       <div className="px-4 pt-2 pb-4">
         {orders === null ? (
           <div className="space-y-2 pt-2">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-20 animate-pulse rounded-2xl bg-slate-200" />
+              <Skeleton key={i} className="h-20" />
             ))}
           </div>
         ) : orders.length === 0 ? (
@@ -104,7 +92,7 @@ export default function POList() {
                         {itemCount} item{itemCount === 1 ? '' : 's'} · ₹{totalCost.toFixed(0)}
                       </p>
                     </div>
-                    <Badge tone={STATUS_TONE[po.status]}>{STATUS_LABEL[po.status]}</Badge>
+                    <StatusBadge kind="po" value={po.status} />
                   </Card>
                 </Link>
               )

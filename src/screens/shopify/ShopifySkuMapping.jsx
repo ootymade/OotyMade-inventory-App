@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { listUnmappedShopifySkus, listSkuMappings, saveSkuMapping, listProducts } from '../../db/storage.js'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
-import { PageHeader, Card, Button, Input, Select, Spinner, EmptyState } from '../../components/ui.jsx'
+import { PageHeader, Card, Button, Input, Select, Spinner, EmptyState, AdminOnly } from '../../components/ui.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
 import { ShoppingBagIcon } from '../../components/icons.jsx'
 
@@ -96,19 +96,11 @@ export default function ShopifySkuMapping() {
 
   const productName = (id) => products.find((p) => p.id === id)?.name || 'Unknown product'
 
-  if (!member?.isAdmin) {
-    return (
-      <div>
-        <PageHeader title="Shopify SKU Mapping" back />
-        <EmptyState title="Admins only" subtitle="Ask an admin to map Shopify SKUs to products" />
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-5 px-4 pb-8 pt-4">
       <PageHeader title="Shopify SKU Mapping" back />
 
+      <AdminOnly fallback={<EmptyState title="Admins only" subtitle="Ask an admin to map Shopify SKUs to products" />}>
       <div>
         <p className="mb-2 text-sm font-semibold text-slate-500">Unmapped SKUs</p>
         {unmapped === null ? (
@@ -146,6 +138,7 @@ export default function ShopifySkuMapping() {
           </Card>
         )}
       </div>
+      </AdminOnly>
     </div>
   )
 }

@@ -29,7 +29,7 @@ export function ToastProvider({ children }) {
             key={t.id}
             role="status"
             className={
-              'w-full max-w-md rounded-xl px-4 py-3 text-sm font-medium shadow-lg ' +
+              'w-full max-w-md rounded-[var(--radius-md)] px-4 py-3.5 text-sm font-semibold shadow-[0_10px_28px_rgba(28,25,23,0.18)] ' +
               (t.tone === 'error'
                 ? 'bg-danger-600 text-white'
                 : t.tone === 'warn'

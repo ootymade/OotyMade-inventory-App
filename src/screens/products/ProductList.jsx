@@ -3,8 +3,8 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { listProducts, listCategories, listSuppliers } from '../../db/storage.js'
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
 import { formatWeight, productWeightGrams } from '../../lib/weight.js'
-import { PageHeader, Input, Select, Badge, Card, EmptyState, Button } from '../../components/ui.jsx'
-import { SearchIcon, PlusIcon, BoxIcon } from '../../components/icons.jsx'
+import { PageHeader, SearchBox, Select, Badge, Card, EmptyState, Button, Skeleton } from '../../components/ui.jsx'
+import { PlusIcon, BoxIcon } from '../../components/icons.jsx'
 
 const REALTIME_TABLES = ['products']
 
@@ -71,24 +71,20 @@ export default function ProductList() {
       />
 
       <div className="space-y-2 px-4 pt-3">
-        <div className="relative">
-          <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400" />
-          <Input
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value)
-              updateParam('q', e.target.value)
-            }}
-            placeholder="Search by name or SKU"
-            className="pl-10"
-          />
-        </div>
+        <SearchBox
+          value={search}
+          onChange={(e) => {
+            setSearch(e.target.value)
+            updateParam('q', e.target.value)
+          }}
+          placeholder="Search by name or SKU"
+        />
 
         <div className="flex gap-2 overflow-x-auto pb-1">
           <button
             onClick={() => updateParam('filter', lowStockOnly ? '' : 'low-stock')}
-            className={`tap shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold ${
-              lowStockOnly ? 'bg-danger-600 text-white' : 'bg-white text-slate-500 ring-1 ring-slate-200'
+            className={`tap shrink-0 rounded-full px-4 text-sm font-bold ${
+              lowStockOnly ? 'bg-danger-600 text-white' : 'bg-slate-100 text-slate-500'
             }`}
           >
             Low stock only
@@ -99,7 +95,7 @@ export default function ProductList() {
               setCategory(e.target.value)
               updateParam('category', e.target.value)
             }}
-            className="!w-auto shrink-0 !py-1.5 text-xs"
+            className="!w-auto shrink-0"
           >
             <option value="">All categories</option>
             {categories.map((c) => (
@@ -111,7 +107,7 @@ export default function ProductList() {
           {supplierFilter && (
             <button
               onClick={() => updateParam('supplierId', '')}
-              className="tap shrink-0 rounded-full bg-brand-100 px-3.5 py-1.5 text-xs font-semibold text-brand-600"
+              className="tap shrink-0 rounded-full bg-brand-100 px-4 text-sm font-bold text-brand-700"
             >
               {supplierName(supplierFilter) || 'Supplier'} ✕
             </button>
@@ -123,7 +119,7 @@ export default function ProductList() {
         {visible === null ? (
           <div className="space-y-2 pt-2">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-2xl bg-slate-200" />
+              <Skeleton key={i} className="h-16" />
             ))}
           </div>
         ) : visible.length === 0 ? (

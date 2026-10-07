@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import { getDashboardStats, listProducts, getTodayOrderSummary, getUnseenNoticeCount } from '../db/storage.js'
 import { useRealtimeRefresh } from '../db/useRealtimeRefresh.js'
 import { useTeamMember } from '../context/TeamMemberContext.jsx'
-import { Card, Badge, Button, EmptyState } from '../components/ui.jsx'
+import { Card, Badge, Button, EmptyState, AdminOnly } from '../components/ui.jsx'
 import {
   AlertIcon,
   ScanIcon,
@@ -149,12 +149,12 @@ export default function Dashboard() {
           <p className="text-xs font-medium text-slate-400">Total products</p>
           <p className="mt-1 text-2xl font-bold text-slate-900">{stats.totalProducts}</p>
         </Card>
-        {member?.isAdmin && (
+        <AdminOnly>
           <Card className="!p-4">
             <p className="text-xs font-medium text-slate-400">Stock value</p>
             <p className="mt-1 text-2xl font-bold text-slate-900">{formatMoney(stats.totalStockValue)}</p>
           </Card>
-        )}
+        </AdminOnly>
         <Link to="/products?filter=low-stock">
           <Card className="!p-4">
             <p className="text-xs font-medium text-slate-400">Low stock</p>

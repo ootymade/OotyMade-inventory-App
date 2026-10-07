@@ -2,23 +2,8 @@ import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { listInvoices } from '../../db/storage.js'
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
-import { PageHeader, Input, Card, Badge, Button, EmptyState } from '../../components/ui.jsx'
-import { SearchIcon, PlusIcon, ClipboardIcon } from '../../components/icons.jsx'
-
-const STATUS_TONE = {
-  draft: 'slate',
-  confirmed: 'brand',
-  shipped: 'warn',
-  delivered: 'ok',
-  cancelled: 'danger',
-}
-const STATUS_LABEL = {
-  draft: 'Proforma (draft)',
-  confirmed: 'Confirmed',
-  shipped: 'Shipped',
-  delivered: 'Delivered',
-  cancelled: 'Cancelled',
-}
+import { PageHeader, SearchBox, Card, StatusBadge, Button, EmptyState, Skeleton } from '../../components/ui.jsx'
+import { PlusIcon, ClipboardIcon } from '../../components/icons.jsx'
 
 const REALTIME_TABLES = ['invoices']
 
@@ -54,22 +39,18 @@ export default function DirectOrderList() {
       />
 
       <div className="px-4 pt-3">
-        <div className="relative">
-          <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by customer, phone, invoice #"
-            className="pl-10"
-          />
-        </div>
+        <SearchBox
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search by customer, phone, invoice #"
+        />
       </div>
 
       <div className="px-4 pt-3 pb-4">
         {orders === null ? (
           <div className="space-y-2">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-20 animate-pulse rounded-2xl bg-slate-200" />
+              <Skeleton key={i} className="h-20" />
             ))}
           </div>
         ) : orders.length === 0 ? (
@@ -97,7 +78,7 @@ export default function DirectOrderList() {
                       {formatDate(o.createdAt)} · ₹{o.total.toFixed(2)}
                     </p>
                   </div>
-                  <Badge tone={STATUS_TONE[o.status]}>{STATUS_LABEL[o.status]}</Badge>
+                  <StatusBadge kind="direct" value={o.status} />
                 </Card>
               </Link>
             ))}

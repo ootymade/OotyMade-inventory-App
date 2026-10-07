@@ -10,7 +10,7 @@ import {
 } from '../../db/storage.js'
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
-import { PageHeader, Badge, Card, EmptyState, Button, Spinner, Input } from '../../components/ui.jsx'
+import { PageHeader, Badge, Card, EmptyState, Button, Spinner, Input, SegmentedControl, AdminOnly, Skeleton } from '../../components/ui.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
 import { ShoppingBagIcon, SyncIcon, EditIcon } from '../../components/icons.jsx'
 
@@ -149,13 +149,13 @@ export default function ShopifyOrderList() {
         subtitle={orders ? `${orders.length} order${orders.length === 1 ? '' : 's'}` : undefined}
         right={
           <div className="flex items-center gap-1">
-            {member?.isAdmin && (
+            <AdminOnly>
               <Link to="/shopify-sku-mapping">
                 <Button size="sm" className="!px-3" variant="ghost" aria-label="Map SKUs">
                   <EditIcon className="h-5 w-5" />
                 </Button>
               </Link>
-            )}
+            </AdminOnly>
             <Button size="sm" className="!px-3" variant="ghost" onClick={() => refresh(false)} disabled={refreshing}>
               {refreshing ? <Spinner className="h-4 w-4" /> : <SyncIcon className="h-5 w-5" />}
             </Button>
@@ -163,7 +163,7 @@ export default function ShopifyOrderList() {
         }
       />
 
-      {member?.isAdmin && (
+      <AdminOnly>
         <div className="px-4 pt-2">
           <button
             onClick={() => {
@@ -233,28 +233,23 @@ export default function ShopifyOrderList() {
             )}
           </div>
         </div>
-      )}
+      </AdminOnly>
 
-      <div className="flex gap-2 overflow-x-auto px-4 pb-1 pt-3">
-        {STATUS_TABS.map((tab) => (
-          <button
-            key={tab.value}
-            onClick={() => {
-              const next = new URLSearchParams(params)
-              if (tab.value) next.set('status', tab.value)
-              else next.delete('status')
-              setParams(next, { replace: true })
-            }}
-            className={`tap shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold ${
-              status === tab.value ? 'bg-brand-600 text-white' : 'bg-white text-slate-500 ring-1 ring-slate-200'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
+      <div className="px-4 pb-1 pt-3">
+        <SegmentedControl
+          options={STATUS_TABS}
+          value={status}
+          onChange={(v) => {
+            const next = new URLSearchParams(params)
+            if (v) next.set('status', v)
+            else next.delete('status')
+            setParams(next, { replace: true })
+          }}
+        />
       </div>
 
-      {member?.isAdmin && lastResult && (
+      {lastResult && (
+        <AdminOnly>
         <div className="px-4 pt-3">
           <Card className="!py-3 text-sm">
             <div className="flex items-center justify-between">
@@ -286,13 +281,14 @@ export default function ShopifyOrderList() {
             )}
           </Card>
         </div>
+        </AdminOnly>
       )}
 
       <div className="mt-2 px-4 pb-4">
         {orders === null ? (
           <div className="space-y-2 pt-2">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-2xl bg-slate-200" />
+              <Skeleton key={i} className="h-16" />
             ))}
           </div>
         ) : orders.length === 0 ? (

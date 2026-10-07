@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { listSuppliers, listProductsBySupplier } from '../../db/storage.js'
-import { PageHeader, Input, Button, EmptyState } from '../../components/ui.jsx'
-import { SearchIcon, PlusIcon, TruckIcon } from '../../components/icons.jsx'
+import { PageHeader, SearchBox, Button, EmptyState, Skeleton } from '../../components/ui.jsx'
+import { PlusIcon, TruckIcon } from '../../components/icons.jsx'
 
 export default function SupplierList() {
   const [search, setSearch] = useState('')
@@ -33,17 +33,14 @@ export default function SupplierList() {
       />
 
       <div className="px-4 pt-3">
-        <div className="relative">
-          <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4.5 w-4.5 -translate-y-1/2 text-slate-400" />
-          <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search suppliers" className="pl-10" />
-        </div>
+        <SearchBox value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search suppliers" />
       </div>
 
       <div className="px-4 pt-3 pb-4">
         {suppliers === null ? (
           <div className="space-y-2">
             {[0, 1, 2].map((i) => (
-              <div key={i} className="h-16 animate-pulse rounded-2xl bg-slate-200" />
+              <Skeleton key={i} className="h-16" />
             ))}
           </div>
         ) : suppliers.length === 0 ? (

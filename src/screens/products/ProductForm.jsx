@@ -10,7 +10,7 @@ import {
   setProductPackSize,
   setProductGstRate,
 } from '../../db/storage.js'
-import { PageHeader, Field, Input, Select, Button, Spinner } from '../../components/ui.jsx'
+import { PageHeader, Field, Input, Select, Button, Spinner, AdminOnly } from '../../components/ui.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
 import { BoxIcon, TrashIcon } from '../../components/icons.jsx'
@@ -268,13 +268,15 @@ export default function ProductForm() {
           </div>
         )}
 
-        {isEdit && member?.isAdmin && (
-          <Field
-            label="GST rate % (optional override)"
-            hint="Blank uses the default rate at sale time. Confirm the actual rate with your CA before setting this — admins only."
-          >
-            <Input type="number" min="0" max="100" step="0.01" value={form.gstRate ?? ''} onChange={set('gstRate')} placeholder="e.g. 5" />
-          </Field>
+        {isEdit && (
+          <AdminOnly>
+            <Field
+              label="GST rate % (optional override)"
+              hint="Blank uses the default rate at sale time. Confirm the actual rate with your CA before setting this — admins only."
+            >
+              <Input type="number" min="0" max="100" step="0.01" value={form.gstRate ?? ''} onChange={set('gstRate')} placeholder="e.g. 5" />
+            </Field>
+          </AdminOnly>
         )}
 
         <Field label="Unit cost (₹)" hint="Used to estimate total stock value">

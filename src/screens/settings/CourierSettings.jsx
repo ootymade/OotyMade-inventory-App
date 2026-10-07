@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { listCouriers, saveCourier, deleteCourier } from '../../db/storage.js'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
-import { PageHeader, Card, Button, Input, Field, Spinner, EmptyState } from '../../components/ui.jsx'
+import { PageHeader, Card, Button, Input, Field, Spinner, EmptyState, AdminOnly } from '../../components/ui.jsx'
 import { TrashIcon } from '../../components/icons.jsx'
 
 const BLANK = { name: '', trackingUrlTemplate: '', isDeepLink: false, useUniversalTracker: false, sortOrder: 0 }
@@ -21,15 +21,6 @@ export default function CourierSettings() {
   useEffect(() => {
     if (member?.isAdmin) load()
   }, [load, member?.isAdmin])
-
-  if (!member?.isAdmin) {
-    return (
-      <div>
-        <PageHeader title="Couriers" back />
-        <EmptyState title="Admins only" subtitle="Ask an admin to manage the courier list" />
-      </div>
-    )
-  }
 
   const edit = (courier) =>
     setForm(
@@ -78,6 +69,7 @@ export default function CourierSettings() {
     <div className="space-y-4 px-4 pb-8 pt-4">
       <PageHeader title="Couriers" back />
 
+      <AdminOnly fallback={<EmptyState title="Admins only" subtitle="Ask an admin to manage the courier list" />}>
       <Card className="space-y-3">
         <p className="text-sm font-semibold text-slate-700">{form.id ? 'Edit courier' : 'Add courier'}</p>
         <Field label="Name">
@@ -155,6 +147,7 @@ export default function CourierSettings() {
           </Card>
         )}
       </div>
+      </AdminOnly>
     </div>
   )
 }
