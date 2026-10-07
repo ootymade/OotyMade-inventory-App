@@ -911,6 +911,99 @@ export async function setShopifyOrderWorkflowStatus({ orderId, newStatus, expect
     : null
 }
 
+// ---------------------------------------------------------------------------
+// Shipment tracking (Shopify orders and direct orders / invoices, level 1:
+// a courier name + tracking number and a link built from a stored template.
+// No live status — that's level 2 (Ship24/17TRACK), not built. The shipments
+// table is designed so level 2 can add last_status/last_checked_at/provider
+// columns later without changing this shape.
+// ---------------------------------------------------------------------------
+
+function rowToCourier(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    trackingUrlTemplate: row.tracking_url_template || '',
+    isDeepLink: row.is_deep_link,
+    sortOrder: row.sort_order,
+  }
+}
+
+export async function listCouriers() {
+  const { data, error } = await supabase.from('couriers').select('*').order('sort_order')
+  must(error)
+  return data.map(rowToCourier)
+}
+
+// Admin-only — enforced by RLS on the couriers table itself, not just the UI.
+export async function saveCourier({ id, name, trackingUrlTemplate, isDeepLink, sortOrder }) {
+  const row = {
+    name: clean(name),
+    tracking_url_template: clean(trackingUrlTemplate) || null,
+    is_deep_link: !!isDeepLink,
+    sort_order: Number(sortOrder) || 0,
+  }
+  const query = id ? supabase.from('couriers').update(row).eq('id', id) : supabase.from('couriers').insert(row)
+  const { error } = await query
+  must(error)
+}
+
+export async function deleteCourier(id) {
+  const { error } = await supabase.from('couriers').delete().eq('id', id)
+  must(error)
+}
+
+function rowToShipment(row) {
+  return {
+    id: row.id,
+    courierName: row.courier_name,
+    trackingNumber: row.tracking_number,
+    updatedBy: row.updated_by,
+    updatedAt: row.updated_at,
+  }
+}
+
+export async function getShipment({ shopifyOrderId, invoiceId } = {}) {
+  let query = supabase.from('shipments').select('*')
+  query = shopifyOrderId ? query.eq('shopify_order_id', shopifyOrderId) : query.eq('invoice_id', invoiceId)
+  const { data, error } = await query.maybeSingle()
+  must(error)
+  return data ? rowToShipment(data) : null
+}
+
+// Any signed-in team member — staff set this themselves on dispatch.
+export async function setShipment({ shopifyOrderId, invoiceId, courierName, trackingNumber }) {
+  const { data, error } = await supabase.rpc('set_shipment', {
+    p_shopify_order_id: shopifyOrderId || null,
+    p_invoice_id: invoiceId || null,
+    p_courier_name: courierName,
+    p_tracking_number: trackingNumber,
+  })
+  must(error)
+  return rowToShipment(data)
+}
+
+// Resolves a courier name against the admin-managed list to build a
+// tracking link. Returns null for "Other"/unrecognized couriers — the
+// Track button is simply omitted in that case, never a broken link.
+export function buildTrackingUrl(courierName, trackingNumber, couriers) {
+  const courier = couriers.find((c) => c.name.toLowerCase() === (courierName || '').toLowerCase())
+  if (!courier || !courier.trackingUrlTemplate) return null
+  return courier.isDeepLink
+    ? courier.trackingUrlTemplate.replace('{tracking_number}', encodeURIComponent(trackingNumber))
+    : courier.trackingUrlTemplate
+}
+
+export function buildWhatsAppShipmentMessage({ customerName, orderNumber, courierName, trackingNumber, trackingUrl }) {
+  const lines = [
+    `Hi ${customerName || 'there'}, your order ${orderNumber} has been dispatched via ${courierName}.`,
+    `Tracking number: ${trackingNumber}`,
+  ]
+  if (trackingUrl) lines.push(`Track here: ${trackingUrl}`)
+  lines.push('— OotyMade')
+  return lines.join('\n')
+}
+
 // Triggers the shopify-sync-orders Edge Function (backfill / manual
 // refresh). Uses the signed-in team member's own session — the function
 // requires a valid Supabase session and does all the actual Shopify calls

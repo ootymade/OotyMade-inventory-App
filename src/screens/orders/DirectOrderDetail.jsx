@@ -5,13 +5,20 @@ import {
   confirmDirectOrder,
   deleteDraftOrder,
   updateShipment,
+  listCouriers,
+  getShipment,
+  setShipment,
+  buildTrackingUrl,
+  buildWhatsAppShipmentMessage,
 } from '../../db/storage.js'
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
 import { downloadInvoicePdf, invoicePdfBlob, invoiceFilename } from '../../lib/invoicePdf.js'
-import { PageHeader, Card, Badge, Button, Input, Field, Spinner, EmptyState } from '../../components/ui.jsx'
+import { PageHeader, Card, Badge, Button, Input, Select, Field, Spinner, EmptyState } from '../../components/ui.jsx'
 import { DownloadIcon, TrashIcon, PackageCheckIcon } from '../../components/icons.jsx'
+
+const OTHER_COURIER = '__other__'
 
 const STATUS_TONE = { draft: 'slate', confirmed: 'brand', shipped: 'warn', delivered: 'ok', cancelled: 'danger' }
 const STATUS_LABEL = {
@@ -37,7 +44,10 @@ export default function DirectOrderDetail() {
   const [data, setData] = useState(null)
   const [notFound, setNotFound] = useState(false)
   const [busy, setBusy] = useState(false)
-  const [courier, setCourier] = useState('')
+  const [couriers, setCouriers] = useState([])
+  const [shipment, setShipmentState] = useState(null)
+  const [courierChoice, setCourierChoice] = useState('')
+  const [courierOther, setCourierOther] = useState('')
   const [tracking, setTracking] = useState('')
 
   const load = useCallback(async () => {
@@ -47,13 +57,29 @@ export default function DirectOrderDetail() {
       return
     }
     setData(result)
-    setCourier(result.invoice.courierName)
-    setTracking(result.invoice.trackingNumber)
+    const existing = await getShipment({ invoiceId: id })
+    setShipmentState(existing)
+    if (existing) setTracking(existing.trackingNumber)
   }, [id])
 
   useEffect(() => {
     load()
   }, [load])
+
+  useEffect(() => {
+    listCouriers().then(setCouriers)
+  }, [])
+
+  useEffect(() => {
+    if (!shipment || couriers.length === 0) return
+    const match = couriers.find((c) => c.name.toLowerCase() === shipment.courierName.toLowerCase())
+    if (match) {
+      setCourierChoice(match.name)
+    } else {
+      setCourierChoice(OTHER_COURIER)
+      setCourierOther(shipment.courierName)
+    }
+  }, [shipment, couriers])
 
   useRealtimeRefresh(REALTIME_TABLES, load)
 
@@ -99,13 +125,38 @@ export default function DirectOrderDetail() {
   }
 
   const saveShipment = async () => {
+    const courierName = courierChoice === OTHER_COURIER ? courierOther.trim() : courierChoice
+    if (!courierName || !tracking.trim()) {
+      push('Pick a courier and enter the tracking number', { tone: 'error' })
+      return
+    }
     setBusy(true)
     try {
-      await updateShipment(id, { courierName: courier, trackingNumber: tracking })
-      push('Shipment details saved', { tone: 'success' })
-      await load()
+      const saved = await setShipment({ invoiceId: id, courierName, trackingNumber: tracking.trim() })
+      setShipmentState(saved)
+      push('Tracking saved', { tone: 'success' })
+    } catch (err) {
+      push(err.message, { tone: 'error' })
     } finally {
       setBusy(false)
+    }
+  }
+
+  const copyWhatsAppMessage = async () => {
+    if (!shipment) return
+    const trackingUrl = buildTrackingUrl(shipment.courierName, shipment.trackingNumber, couriers)
+    const message = buildWhatsAppShipmentMessage({
+      customerName: invoice.customerName,
+      orderNumber: invoice.kind === 'gst' ? `INV-${invoice.invoiceNumber}` : invoice.invoiceNumber,
+      courierName: shipment.courierName,
+      trackingNumber: shipment.trackingNumber,
+      trackingUrl,
+    })
+    try {
+      await navigator.clipboard.writeText(message)
+      push('WhatsApp message copied', { tone: 'success' })
+    } catch {
+      push('Could not copy — your browser may be blocking clipboard access', { tone: 'error' })
     }
   }
 
@@ -127,9 +178,7 @@ export default function DirectOrderDetail() {
       const blob = await invoicePdfBlob({ invoice, items })
       const file = new File([blob], invoiceFilename(invoice), { type: 'application/pdf' })
       if (navigator.canShare && navigator.canShare({ files: [file] })) {
-        const trackLine = invoice.trackingNumber
-          ? `\nTrack my order: ${invoice.courierName || 'Courier'} — ${invoice.trackingNumber}`
-          : ''
+        const trackLine = shipment ? `\nTrack my order: ${shipment.courierName} — ${shipment.trackingNumber}` : ''
         await navigator.share({
           files: [file],
           title: invoice.kind === 'gst' ? `Invoice INV-${invoice.invoiceNumber}` : 'Proforma Invoice',
@@ -225,14 +274,48 @@ export default function DirectOrderDetail() {
             <Card className="space-y-3">
               <p className="text-sm font-semibold text-slate-700">Shipment tracking</p>
               <Field label="Courier">
-                <Input value={courier} onChange={(e) => setCourier(e.target.value)} placeholder="e.g. Delhivery, DTDC, India Post" />
+                <Select value={courierChoice} onChange={(e) => setCourierChoice(e.target.value)}>
+                  <option value="">Pick a courier…</option>
+                  {couriers.map((c) => (
+                    <option key={c.id} value={c.name}>
+                      {c.name}
+                    </option>
+                  ))}
+                  <option value={OTHER_COURIER}>Other</option>
+                </Select>
               </Field>
+              {courierChoice === OTHER_COURIER && (
+                <Field label="Courier name">
+                  <Input value={courierOther} onChange={(e) => setCourierOther(e.target.value)} />
+                </Field>
+              )}
               <Field label="Tracking number">
                 <Input value={tracking} onChange={(e) => setTracking(e.target.value)} />
               </Field>
               <Button variant="outline" size="sm" onClick={saveShipment} disabled={busy}>
                 Save tracking details
               </Button>
+              {shipment && (
+                <div className="flex gap-2">
+                  {buildTrackingUrl(shipment.courierName, shipment.trackingNumber, couriers) ? (
+                    <Button
+                      as="a"
+                      href={buildTrackingUrl(shipment.courierName, shipment.trackingNumber, couriers)}
+                      target="_blank"
+                      rel="noreferrer"
+                      size="sm"
+                      className="flex-1"
+                    >
+                      Track
+                    </Button>
+                  ) : (
+                    <p className="flex-1 self-center text-xs text-slate-400">No tracking link known for this courier.</p>
+                  )}
+                  <Button size="sm" variant="outline" className="flex-1" onClick={copyWhatsAppMessage}>
+                    Copy WhatsApp message
+                  </Button>
+                </div>
+              )}
               {invoice.status === 'confirmed' && (
                 <Button size="sm" onClick={() => setStatus('shipped')} disabled={busy}>
                   <PackageCheckIcon className="h-4 w-4" /> Mark as shipped

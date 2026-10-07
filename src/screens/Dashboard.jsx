@@ -286,6 +286,12 @@ export default function Dashboard() {
         <Link to="/data-sync">Export data / bulk import</Link>
         <span>·</span>
         <Link to="/change-password">Change password</Link>
+        {member?.isAdmin && (
+          <>
+            <span>·</span>
+            <Link to="/courier-settings">Manage couriers</Link>
+          </>
+        )}
       </div>
     </div>
   )

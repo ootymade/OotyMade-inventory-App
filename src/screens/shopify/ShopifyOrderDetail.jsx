@@ -4,6 +4,11 @@ import {
   getShopifyOrderWithItems,
   setShopifyOrderWorkflowStatus,
   listTeamMemberNames,
+  listCouriers,
+  getShipment,
+  setShipment,
+  buildTrackingUrl,
+  buildWhatsAppShipmentMessage,
   WORKFLOW_STEPS,
   WORKFLOW_LABELS,
   HOLD_BLOCKED_STEPS,
@@ -11,8 +16,10 @@ import {
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
-import { PageHeader, Card, Badge, Button, Input, Spinner, EmptyState } from '../../components/ui.jsx'
+import { PageHeader, Card, Badge, Button, Input, Select, Spinner, EmptyState } from '../../components/ui.jsx'
 import { ShoppingBagIcon } from '../../components/icons.jsx'
+
+const OTHER_COURIER = '__other__'
 
 const REALTIME_TABLES = ['shopify_sync_ping']
 
@@ -41,6 +48,12 @@ export default function ShopifyOrderDetail() {
   const [teamNames, setTeamNames] = useState({})
   const [updating, setUpdating] = useState(false)
   const [overrideReasons, setOverrideReasons] = useState({})
+  const [couriers, setCouriers] = useState([])
+  const [shipment, setShipmentState] = useState(null)
+  const [courierChoice, setCourierChoice] = useState('')
+  const [courierOther, setCourierOther] = useState('')
+  const [trackingInput, setTrackingInput] = useState('')
+  const [savingShipment, setSavingShipment] = useState(false)
 
   const load = useCallback(async () => {
     const result = await getShopifyOrderWithItems(id)
@@ -49,6 +62,11 @@ export default function ShopifyOrderDetail() {
       return
     }
     setData(result)
+    const existing = await getShipment({ shopifyOrderId: id })
+    setShipmentState(existing)
+    if (existing) {
+      setTrackingInput(existing.trackingNumber)
+    }
   }, [id])
 
   useEffect(() => {
@@ -59,7 +77,58 @@ export default function ShopifyOrderDetail() {
     listTeamMemberNames().then((rows) => {
       setTeamNames(Object.fromEntries(rows.map((r) => [r.id, r.name])))
     })
+    listCouriers().then(setCouriers)
   }, [])
+
+  // Once couriers have loaded and we know the existing shipment (if any),
+  // pick the matching dropdown option — or fall back to "Other" with the
+  // saved name in the free-text field.
+  useEffect(() => {
+    if (!shipment || couriers.length === 0) return
+    const match = couriers.find((c) => c.name.toLowerCase() === shipment.courierName.toLowerCase())
+    if (match) {
+      setCourierChoice(match.name)
+    } else {
+      setCourierChoice(OTHER_COURIER)
+      setCourierOther(shipment.courierName)
+    }
+  }, [shipment, couriers])
+
+  const saveShipment = async () => {
+    const courierName = courierChoice === OTHER_COURIER ? courierOther.trim() : courierChoice
+    if (!courierName || !trackingInput.trim()) {
+      push('Pick a courier and enter the tracking number', { tone: 'error' })
+      return
+    }
+    setSavingShipment(true)
+    try {
+      const saved = await setShipment({ shopifyOrderId: id, courierName, trackingNumber: trackingInput.trim() })
+      setShipmentState(saved)
+      push('Tracking saved', { tone: 'success' })
+    } catch (err) {
+      push(err.message, { tone: 'error' })
+    } finally {
+      setSavingShipment(false)
+    }
+  }
+
+  const copyWhatsAppMessage = async () => {
+    if (!data || !shipment) return
+    const trackingUrl = buildTrackingUrl(shipment.courierName, shipment.trackingNumber, couriers)
+    const message = buildWhatsAppShipmentMessage({
+      customerName: data.order.customerName,
+      orderNumber: data.order.orderNumber,
+      courierName: shipment.courierName,
+      trackingNumber: shipment.trackingNumber,
+      trackingUrl,
+    })
+    try {
+      await navigator.clipboard.writeText(message)
+      push('WhatsApp message copied', { tone: 'success' })
+    } catch {
+      push('Could not copy — your browser may be blocking clipboard access', { tone: 'error' })
+    }
+  }
 
   useRealtimeRefresh(REALTIME_TABLES, load)
 
@@ -184,6 +253,51 @@ export default function ShopifyOrderDetail() {
             Payment hold overridden by {teamNames[order.workflowHoldOverrideBy] || 'a team member'}
             {order.workflowHoldOverrideAt && ` on ${formatDate(order.workflowHoldOverrideAt)}`}: "{order.workflowHoldOverrideReason}"
           </p>
+        )}
+      </Card>
+
+      <Card className="space-y-2.5">
+        <p className="text-xs font-semibold text-slate-500">Shipment</p>
+        <div className="flex gap-2">
+          <Select value={courierChoice} onChange={(e) => setCourierChoice(e.target.value)} className="flex-1">
+            <option value="">Pick a courier…</option>
+            {couriers.map((c) => (
+              <option key={c.id} value={c.name}>
+                {c.name}
+              </option>
+            ))}
+            <option value={OTHER_COURIER}>Other</option>
+          </Select>
+        </div>
+        {courierChoice === OTHER_COURIER && (
+          <Input value={courierOther} onChange={(e) => setCourierOther(e.target.value)} placeholder="Courier name" />
+        )}
+        <Input value={trackingInput} onChange={(e) => setTrackingInput(e.target.value)} placeholder="Tracking number" />
+        <Button size="sm" variant="outline" onClick={saveShipment} disabled={savingShipment}>
+          {savingShipment ? <Spinner className="h-4 w-4" /> : 'Save tracking'}
+        </Button>
+        {shipment && (
+          <div className="flex gap-2 pt-1">
+            {buildTrackingUrl(shipment.courierName, shipment.trackingNumber, couriers) ? (
+              <Button
+                as="a"
+                href={buildTrackingUrl(shipment.courierName, shipment.trackingNumber, couriers)}
+                target="_blank"
+                rel="noreferrer"
+                size="sm"
+                className="flex-1"
+              >
+                Track
+              </Button>
+            ) : (
+              <p className="flex-1 self-center text-xs text-slate-400">
+                No tracking link known for "{shipment.courierName}" — share the number directly.
+              </p>
+            )}
+            <Button size="sm" variant="outline" className="flex-1" onClick={copyWhatsAppMessage}>
+              Copy WhatsApp message
+            </Button>
+          </div>
         )}
       </Card>
 
