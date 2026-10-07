@@ -60,7 +60,7 @@ export default function Dashboard() {
   }, [])
 
   useEffect(() => {
-    if (member?.id) getUnseenNoticeCount(member.id).then(setUnseenNotices)
+    if (member?.id) getUnseenNoticeCount(member.id).then(setUnseenNotices).catch(() => setUnseenNotices(0))
   }, [member?.id])
 
   useEffect(() => {

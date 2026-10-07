@@ -16,7 +16,7 @@ function SeenBy({ noticeId, open }) {
   const [seenBy, setSeenBy] = useState(null)
 
   useEffect(() => {
-    if (open) listNoticeSeenBy(noticeId).then(setSeenBy)
+    if (open) listNoticeSeenBy(noticeId).then(setSeenBy).catch(() => setSeenBy([]))
   }, [open, noticeId])
 
   if (!open) return null
@@ -33,17 +33,26 @@ export default function TeamNoticeBoard() {
   const { member } = useTeamMember()
   const { push } = useToast()
   const [notices, setNotices] = useState(null)
+  const [available, setAvailable] = useState(true)
   const [body, setBody] = useState('')
   const [posting, setPosting] = useState(false)
   const [expanded, setExpanded] = useState(null)
 
+  // If the Stage A tables haven't been created yet, fail quietly — an
+  // empty board, not a stuck spinner or a technical error on screen.
   const load = useCallback(async () => {
-    const list = await listNotices()
-    setNotices(list)
-    if (member?.id) {
-      for (const n of list) {
-        markNoticeSeen(n.id, member.id)
+    try {
+      const list = await listNotices()
+      setNotices(list)
+      setAvailable(true)
+      if (member?.id) {
+        for (const n of list) {
+          markNoticeSeen(n.id, member.id).catch(() => {})
+        }
       }
+    } catch {
+      setNotices([])
+      setAvailable(false)
     }
   }, [member?.id])
 
@@ -84,9 +93,10 @@ export default function TeamNoticeBoard() {
     <div className="space-y-4 px-4 pb-8 pt-4">
       <PageHeader title="Team Board" back />
 
-      {member?.isAdmin && (
+      {member?.isAdmin && available && (
         <Card className="space-y-2">
           <Textarea rows={3} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Post an announcement..." />
+          <p className="text-xs text-slate-400">Don't paste customer phone numbers or addresses here.</p>
           <Button size="sm" onClick={post} disabled={posting}>
             {posting ? <Spinner className="h-4 w-4" /> : 'Post'}
           </Button>

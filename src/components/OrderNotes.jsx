@@ -18,11 +18,20 @@ export default function OrderNotes({ shopifyOrderId, invoiceId }) {
   const { member } = useTeamMember()
   const { push } = useToast()
   const [notes, setNotes] = useState(null)
+  const [available, setAvailable] = useState(true)
   const [body, setBody] = useState('')
   const [saving, setSaving] = useState(false)
 
+  // If the Stage A tables haven't been created yet, hide this card
+  // entirely rather than show a stuck spinner or a technical error.
   const load = useCallback(async () => {
-    setNotes(await listOrderNotes({ shopifyOrderId, invoiceId }))
+    try {
+      setNotes(await listOrderNotes({ shopifyOrderId, invoiceId }))
+      setAvailable(true)
+    } catch {
+      setNotes([])
+      setAvailable(false)
+    }
   }, [shopifyOrderId, invoiceId])
 
   useEffect(() => {
@@ -45,6 +54,8 @@ export default function OrderNotes({ shopifyOrderId, invoiceId }) {
     }
   }
 
+  if (!available) return null
+
   return (
     <Card className="space-y-3">
       <p className="text-sm font-semibold text-slate-700">Notes</p>
@@ -62,6 +73,7 @@ export default function OrderNotes({ shopifyOrderId, invoiceId }) {
           ))}
         </div>
       )}
+      <p className="text-xs text-slate-400">Don't paste customer phone numbers or addresses here.</p>
       <div className="flex gap-2">
         <Textarea rows={2} value={body} onChange={(e) => setBody(e.target.value)} placeholder="Add a note..." className="flex-1" />
         <Button size="sm" onClick={add} disabled={saving}>
