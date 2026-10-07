@@ -13,6 +13,7 @@ import {
   upsertOrder,
   ensureWebhooks,
   getSyncSettings,
+  getCallerTeamMember,
   ORDER_FIELDS,
   InvalidShopifyDomainError,
   CORS_HEADERS,
@@ -47,6 +48,18 @@ Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') {
     return new Response(JSON.stringify({ error: 'Use POST' }), {
       status: 405,
+      headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+    })
+  }
+
+  // verify_jwt only proves this is *some* signed-in Supabase session, not
+  // one of our team members. The Refresh button and the background poll
+  // are both open to any team member, admin or staff, so this only checks
+  // membership, not role.
+  const caller = await getCallerTeamMember(req)
+  if (!caller) {
+    return new Response(JSON.stringify({ ok: false, error: 'Not a team member' }), {
+      status: 403,
       headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
     })
   }

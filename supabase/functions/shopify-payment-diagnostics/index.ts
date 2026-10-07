@@ -7,8 +7,7 @@
 // diagnostic tool, not part of the normal sync/webhook path.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
-import { createClient } from 'jsr:@supabase/supabase-js@2'
-import { adminClient, shopifyGraphql, getSyncSettings, parseOrderNumber, CORS_HEADERS } from '../_shared/shopify.ts'
+import { adminClient, shopifyGraphql, getSyncSettings, getCallerTeamMember, parseOrderNumber, CORS_HEADERS } from '../_shared/shopify.ts'
 
 const QUERY = `
   query OrderPayments($id: ID!) {
@@ -41,20 +40,7 @@ Deno.serve(async (req: Request) => {
   }
 
   try {
-    const authHeader = req.headers.get('Authorization') ?? ''
-    const callerClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
-      global: { headers: { Authorization: authHeader } },
-    })
-    const { data: userData, error: userError } = await callerClient.auth.getUser()
-    if (userError || !userData?.user) {
-      return new Response(JSON.stringify({ ok: false, error: 'Not signed in' }), {
-        status: 401,
-        headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
-      })
-    }
-
-    const supabase = adminClient()
-    const { data: caller } = await supabase.from('team_members').select('role').eq('id', userData.user.id).maybeSingle()
+    const caller = await getCallerTeamMember(req)
     if (caller?.role !== 'admin') {
       return new Response(JSON.stringify({ ok: false, error: 'Admin only' }), {
         status: 403,
@@ -62,6 +48,7 @@ Deno.serve(async (req: Request) => {
       })
     }
 
+    const supabase = adminClient()
     const { firstOrderNumber } = await getSyncSettings(supabase)
 
     const { data: allOrders, error: ordersError } = await supabase

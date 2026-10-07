@@ -43,6 +43,30 @@ export function adminClient(): SupabaseClient {
   )
 }
 
+export type CallerIdentity = { id: string; role: string } | null
+
+// verify_jwt only proves the caller has *some* valid Supabase session —
+// not that they're one of our team members. This resolves the caller
+// from the request's own Authorization header (never the service role)
+// and looks up their team_members row. Returns null on no session or no
+// team_members row, so callers can respond with a plain 401/403 instead
+// of throwing.
+export async function getCallerTeamMember(req: Request): Promise<CallerIdentity> {
+  const authHeader = req.headers.get('Authorization') ?? ''
+  const callerClient = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_ANON_KEY')!, {
+    global: { headers: { Authorization: authHeader } },
+  })
+  const { data: userData, error: userError } = await callerClient.auth.getUser()
+  if (userError || !userData?.user) return null
+
+  const { data: caller } = await adminClient()
+    .from('team_members')
+    .select('id, role')
+    .eq('id', userData.user.id)
+    .maybeSingle()
+  return caller ?? null
+}
+
 async function fetchNewToken(domain: string, clientId: string, clientSecret: string) {
   const res = await fetch(`https://${domain}/admin/oauth/access_token`, {
     method: 'POST',
