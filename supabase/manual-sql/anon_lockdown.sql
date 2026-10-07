@@ -5,17 +5,23 @@
 --   1. Revokes every raw privilege (SELECT/INSERT/UPDATE/DELETE/EXECUTE/etc.)
 --      that the `anon` role, or the PUBLIC pseudo-role (= "every role"),
 --      currently holds on anything in the public schema: tables, views,
---      sequences, functions.
---   2. Rewrites the stored default-privilege entries for the two roles that
---      actually create objects in this project (`postgres`, the normal SQL
---      Editor/migration role, and `supabase_admin`) so that a future
---      CREATE TABLE/FUNCTION/SEQUENCE does not automatically hand anon
---      anything again. Right now both roles have a standing default that
---      grants anon full CRUD/EXECUTE on every new object — that's the
---      Supabase project-template default, and it's what's been quietly
---      giving every table created this session (and before) a raw anon
---      grant even though RLS blocked the actual data.
---   3. Touches nothing belonging to `authenticated` or `service_role` —
+--      sequences, functions owned by `postgres` (the role this runs as).
+--   2. Drops the `http` extension (see the comment at that line) — the one
+--      case REVOKE cannot reach, because its functions are owned by
+--      `supabase_admin`, not `postgres`.
+--   3. Rewrites the stored default-privilege entries for `postgres` (the
+--      role that actually creates objects in this project — SQL Editor,
+--      migrations, every tool used so far) so that a future CREATE
+--      TABLE/FUNCTION/SEQUENCE does not automatically hand anon anything
+--      again. It has a standing default that grants anon full
+--      CRUD/EXECUTE on every new object — that's the Supabase
+--      project-template default, and it's what's been quietly giving
+--      every table created this session (and before) a raw anon grant
+--      even though RLS blocked the actual data. (supabase_admin has the
+--      same standing default in principle; `postgres` cannot alter it —
+--      see the comment at that line. In practice this never matters,
+--      since nothing in this project is ever created as supabase_admin.)
+--   4. Touches nothing belonging to `authenticated` or `service_role` —
 --      every grant they currently have stays exactly as it is.
 --
 -- Why this is believed SAFE (read before running):
@@ -43,7 +49,12 @@
 --     issue outbound HTTP requests). I grepped the whole frontend and
 --     found no call to any of these from the app, and there are no
 --     triggers and no pg_cron jobs in this project that use them either —
---     nothing in this codebase depends on anon/PUBLIC keeping access.
+--     nothing in this codebase depends on anon/PUBLIC keeping access. A
+--     plain REVOKE cannot close this one at all (these functions are
+--     owned by supabase_admin — tested directly, a revoke run as
+--     postgres on them has no effect and raises no error either, so it
+--     would have looked successful while changing nothing), which is why
+--     this script drops the extension instead.
 --   - No view, table, or function has a policy or grant that names the
 --     `anon` role directly. Every policy that is scoped to `roles: public`
 --     (customers, daily_order_counts, invoice_items, invoices, movements,
@@ -89,21 +100,49 @@ revoke all privileges on all tables in schema public from anon, public;
 revoke all privileges on all sequences in schema public from anon, public;
 revoke all privileges on all functions in schema public from anon, public;
 
+-- The line above silently does nothing for the http extension's functions
+-- (http, http_get, http_post, ..., urlencode, bytea_to_text, text_to_bytea)
+-- specifically — tested directly: a REVOKE run as `postgres` on an object
+-- owned by `supabase_admin` (which is what installing the http extension
+-- made it) has no effect and raises no error either, so this would have
+-- looked like it worked while actually leaving every one of those
+-- functions exactly as anon-executable as before. `postgres` cannot act as
+-- supabase_admin and cannot change who owns these functions, so REVOKE can
+-- never close this one. The one operation Supabase does let `postgres` run
+-- on an extension regardless of who owns it is dropping it — tested, this
+-- works. Nothing in this app, no trigger, and no pg_cron job uses this
+-- extension (checked), so removing it entirely is both the only available
+-- fix and a cleaner one than a revoke would have been anyway.
+drop extension if exists http;
+
 -- ---------------------------------------------------------------------------
--- 2. Default privileges for objects created in the future. Two roles can
---    currently create objects here (postgres, supabase_admin) and both have
---    a stored default that hands anon everything on anything new — cancel
---    that on both, for tables, sequences and functions.
+-- 2. Default privileges for objects created in the future. Every table in
+--    this project today is owned by `postgres` — that's the role that
+--    actually creates things here (SQL Editor, migrations, this tool) —
+--    and it has a stored default that hands anon everything on anything
+--    new. Cancel that.
 -- ---------------------------------------------------------------------------
 alter default privileges for role postgres in schema public revoke all on tables from anon;
 alter default privileges for role postgres in schema public revoke all on sequences from anon;
 alter default privileges for role postgres in schema public revoke all on functions from anon;
 alter default privileges for role postgres in schema public revoke all on functions from public;
 
-alter default privileges for role supabase_admin in schema public revoke all on tables from anon;
-alter default privileges for role supabase_admin in schema public revoke all on sequences from anon;
-alter default privileges for role supabase_admin in schema public revoke all on functions from anon;
-alter default privileges for role supabase_admin in schema public revoke all on functions from public;
+-- supabase_admin also has the same standing default, in principle, but
+-- `postgres` (the role this SQL Editor runs as) is not a superuser and is
+-- not a member of supabase_admin, so it cannot alter supabase_admin's
+-- defaults — confirmed by actually trying this. In practice this is inert:
+-- nothing in this project is ever created as supabase_admin, so its default
+-- is never the one that fires. Attempted and skipped cleanly rather than
+-- left out silently, in case that ever stops being true.
+do $$
+begin
+  alter default privileges for role supabase_admin in schema public revoke all on tables from anon;
+  alter default privileges for role supabase_admin in schema public revoke all on sequences from anon;
+  alter default privileges for role supabase_admin in schema public revoke all on functions from anon;
+  alter default privileges for role supabase_admin in schema public revoke all on functions from public;
+exception when insufficient_privilege then
+  raise notice 'Skipped supabase_admin defaults — this role cannot alter them (expected; harmless, see comment above)';
+end $$;
 
 commit;
 
@@ -131,14 +170,18 @@ where s.relkind = 'S' and n.nspname = 'public'
   and (has_sequence_privilege('anon', s.oid, 'SELECT') or has_sequence_privilege('anon', s.oid, 'USAGE'));
 
 -- 2b. Spot-check the specific gaps this script closes.
---     Expect: every column below is false.
+--     Expect: every column below is false. (http_get/urlencode are
+--     deliberately not spot-checked by a hardcoded signature here — the
+--     query right above already lists every function anon/public can
+--     still execute, including those if the http extension is present;
+--     a hardcoded 'urlencode(text)'-style signature errors with
+--     "does not exist" if that exact overload isn't there, which is
+--     exactly the brittleness that query avoids.)
 select
   has_table_privilege('anon', 'public.customers', 'SELECT') as customers_select,
   has_table_privilege('anon', 'public.team_members', 'SELECT') as team_members_select,
   has_table_privilege('anon', 'public.invoices', 'SELECT') as invoices_select,
-  has_function_privilege('anon', 'public.update_shopify_first_order_number(integer)', 'EXECUTE') as update_cutoff_exec,
-  has_function_privilege('anon', 'public.http_get(character varying)', 'EXECUTE') as http_get_exec,
-  has_function_privilege('anon', 'public.urlencode(text)', 'EXECUTE') as urlencode_exec;
+  has_function_privilege('anon', 'public.update_shopify_first_order_number(integer)', 'EXECUTE') as update_cutoff_exec;
 
 -- 2c. authenticated must be completely unaffected. Expect: every column true.
 select
