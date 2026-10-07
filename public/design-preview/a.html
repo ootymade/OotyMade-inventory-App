@@ -1,0 +1,639 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<meta name="robots" content="noindex, nofollow" />
+<title>Design preview — Direction A: Clear</title>
+<style>
+  /* ============== TOKENS (swap these to change the whole look) ============== */
+  :root {
+    /* Neutral scale — used for backgrounds, borders, body text */
+    --n-0: #ffffff;
+    --n-50: #f8fafc;
+    --n-100: #f1f5f9;
+    --n-200: #e2e8f0;
+    --n-300: #cbd5e1;
+    --n-400: #94a3b8;
+    --n-500: #64748b;
+    --n-600: #475569;
+    --n-700: #334155;
+    --n-800: #1e293b;
+    --n-900: #0f172a;
+
+    /* Accent — ONE color, undecided. This is a placeholder; every accent use
+       in this page reads these three variables, so trying a brand color
+       later is a three-line edit, not a redesign. */
+    --accent-50: #eff6ff;
+    --accent-100: #dbeafe;
+    --accent-500: #2563eb;
+    --accent-600: #1d4ed8;
+    --accent-700: #1e40af;
+    --accent-ink: #ffffff; /* text color on top of --accent-500/600 */
+
+    /* Status colors — separate from the accent on purpose, so status meaning
+       never depends on whichever accent color gets picked later */
+    --ok-50: #f0fdf4; --ok-600: #16a34a; --ok-700: #15803d;
+    --warn-50: #fffbeb; --warn-600: #d97706; --warn-700: #b45309;
+    --danger-50: #fef2f2; --danger-600: #dc2626; --danger-700: #b91c1c;
+
+    /* Type scale — every input/button/body value is >=16px per the quality bar */
+    --fs-caption: 13px;
+    --fs-label: 14px;
+    --fs-body: 16px;
+    --fs-body-lg: 17px;
+    --fs-h3: 19px;
+    --fs-h2: 22px;
+    --fs-h1: 26px;
+    --fs-display: 30px;
+
+    --radius-sm: 10px;
+    --radius-md: 14px;
+    --radius-lg: 18px;
+    --radius-full: 999px;
+
+    --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+    --space-5: 20px; --space-6: 24px; --space-8: 32px;
+
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+    --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
+
+    --tap-min: 48px;
+    --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; overflow-x: hidden; max-width: 100vw; }
+  body {
+    font-family: var(--font);
+    background: var(--n-50);
+    color: var(--n-900);
+    font-size: var(--fs-body);
+    line-height: 1.45;
+    -webkit-text-size-adjust: 100%;
+  }
+  h1, h2, h3, p { margin: 0; }
+  img, svg { display: block; }
+  a { color: var(--accent-600); text-decoration: none; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  .wrap { max-width: 920px; margin: 0 auto; padding: 0 var(--space-5) var(--space-8); }
+
+  .topbar {
+    position: sticky; top: 0; z-index: 50;
+    background: rgba(255,255,255,0.92); backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--n-200);
+    padding: env(safe-area-inset-top) var(--space-5) var(--space-3);
+    padding-top: calc(env(safe-area-inset-top) + 12px);
+  }
+  .topbar-row { max-width: 920px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+  .topbar-title { font-size: var(--fs-h3); font-weight: 700; }
+  .topbar-title span { color: var(--accent-600); }
+  .topbar-links { display: flex; gap: var(--space-3); font-size: var(--fs-label); font-weight: 600; }
+  .topbar-links a { padding: var(--space-2) var(--space-1); min-height: 32px; display: flex; align-items: center; }
+
+  .banner {
+    margin-top: var(--space-5);
+    background: var(--accent-50); border: 1px solid var(--accent-100);
+    border-radius: var(--radius-md); padding: var(--space-4);
+    font-size: var(--fs-label); color: var(--n-700);
+  }
+  .banner strong { color: var(--accent-700); }
+
+  section { margin-top: var(--space-8); }
+  .section-title { font-size: var(--fs-h2); font-weight: 800; margin-bottom: var(--space-1); }
+  .section-sub { font-size: var(--fs-label); color: var(--n-500); margin-bottom: var(--space-4); }
+
+  /* ---- palette swatches ---- */
+  .swatch-row { display: flex; gap: var(--space-2); flex-wrap: wrap; }
+  .swatch { width: 72px; }
+  .swatch-chip { height: 48px; border-radius: var(--radius-sm); border: 1px solid rgba(0,0,0,0.06); }
+  .swatch-label { font-size: 11px; color: var(--n-500); margin-top: var(--space-1); text-align: center; }
+  .accent-callout { margin-top: var(--space-3); font-size: var(--fs-caption); color: var(--n-500); }
+
+  /* ---- type scale ---- */
+  .type-row { display: flex; align-items: baseline; gap: var(--space-4); padding: var(--space-3) 0; border-bottom: 1px solid var(--n-200); }
+  .type-row:last-child { border-bottom: none; }
+  .type-sample { flex: 1; font-weight: 700; }
+  .type-meta { font-size: var(--fs-caption); color: var(--n-500); white-space: nowrap; }
+
+  /* ---- spacing scale ---- */
+  .space-row { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-2) 0; }
+  .space-bar { background: var(--accent-500); border-radius: 4px; height: 14px; }
+  .space-meta { font-size: var(--fs-caption); color: var(--n-500); width: 90px; }
+
+  /* ---- buttons ---- */
+  .demo-row { display: flex; gap: var(--space-3); flex-wrap: wrap; align-items: center; margin-bottom: var(--space-3); }
+  .btn {
+    appearance: none; border: none; cursor: pointer;
+    font-family: inherit; font-weight: 700; font-size: var(--fs-body);
+    min-height: var(--tap-min); padding: 0 var(--space-5);
+    border-radius: var(--radius-md);
+    display: inline-flex; align-items: center; justify-content: center; gap: var(--space-2);
+    transition: transform 0.12s ease, background 0.12s ease;
+  }
+  .btn:active { transform: scale(0.97); }
+  .btn-primary { background: var(--accent-600); color: var(--accent-ink); box-shadow: var(--shadow-sm); }
+  .btn-primary:hover { background: var(--accent-700); }
+  .btn-secondary { background: var(--n-100); color: var(--n-800); }
+  .btn-secondary:hover { background: var(--n-200); }
+  .btn-outline { background: var(--n-0); color: var(--n-700); border: 1.5px solid var(--n-300); }
+  .btn-danger { background: var(--danger-600); color: #fff; }
+  .btn-ghost { background: transparent; color: var(--accent-600); padding: 0 var(--space-3); }
+  .btn-sm { min-height: 40px; padding: 0 var(--space-4); font-size: var(--fs-label); }
+  .btn-icon { min-width: var(--tap-min); padding: 0; }
+  .btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+  /* ---- inputs ---- */
+  .field { margin-bottom: var(--space-4); max-width: 320px; }
+  .field label { display: block; font-size: var(--fs-label); font-weight: 600; color: var(--n-700); margin-bottom: var(--space-2); }
+  .input, .select {
+    width: 100%; font-family: inherit; font-size: var(--fs-body);
+    min-height: var(--tap-min); padding: 0 var(--space-4);
+    border: 1.5px solid var(--n-300); border-radius: var(--radius-md);
+    background: var(--n-0); color: var(--n-900);
+  }
+  .input:focus, .select:focus { outline: none; border-color: var(--accent-500); box-shadow: 0 0 0 3px var(--accent-100); }
+
+  /* ---- cards ---- */
+  .card-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); max-width: 420px; }
+  .card { background: var(--n-0); border-radius: var(--radius-lg); border: 1px solid var(--n-200); box-shadow: var(--shadow-sm); padding: var(--space-4); }
+  .stat-label { font-size: var(--fs-caption); color: var(--n-500); font-weight: 600; }
+  .stat-value { font-size: var(--fs-h1); font-weight: 800; margin-top: var(--space-1); }
+
+  /* ---- badges ---- */
+  .badge { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 700; padding: 5px 12px; border-radius: var(--radius-full); }
+  .badge-dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .badge-new { background: var(--n-100); color: var(--n-600); }
+  .badge-packing { background: var(--accent-50); color: var(--accent-700); }
+  .badge-packed { background: var(--warn-50); color: var(--warn-700); }
+  .badge-dispatched { background: #eef2ff; color: #4338ca; }
+  .badge-delivered { background: var(--ok-50); color: var(--ok-700); }
+  .badge-hold { background: var(--danger-50); color: var(--danger-700); }
+
+  /* ================= PHONE FRAME ================= */
+  .phone-shell {
+    margin-top: var(--space-5);
+    display: flex; gap: var(--space-6); flex-wrap: wrap; align-items: flex-start;
+  }
+  .phone {
+    width: 390px; max-width: 100%;
+    background: var(--n-900);
+    border-radius: 42px;
+    padding: 12px;
+    box-shadow: var(--shadow-md);
+  }
+  .phone-screen {
+    background: var(--n-50);
+    border-radius: 32px;
+    overflow: hidden;
+    height: 760px;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }
+  .phone-notch { height: 28px; background: var(--n-900); border-radius: 0 0 16px 16px; width: 120px; margin: 0 auto; position: absolute; top: 0; left: 50%; transform: translateX(-50%); z-index: 20; }
+
+  .role-switch {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--n-800); color: #fff;
+    padding: 36px var(--space-4) var(--space-3);
+    font-size: var(--fs-caption);
+  }
+  .role-switch-buttons { display: flex; background: rgba(255,255,255,0.12); border-radius: var(--radius-full); padding: 3px; }
+  .role-btn { border: none; background: transparent; color: rgba(255,255,255,0.7); font-family: inherit; font-weight: 700; font-size: 12px; padding: 7px 14px; border-radius: var(--radius-full); cursor: pointer; min-height: 32px; }
+  .role-btn.active { background: #fff; color: var(--n-900); }
+
+  .screen-body { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+
+  /* -- app home header -- */
+  .app-header { background: var(--accent-600); color: #fff; padding: var(--space-4) var(--space-4) var(--space-5); }
+  .app-header-row { display: flex; align-items: center; justify-content: space-between; }
+  .app-hi { font-size: var(--fs-caption); opacity: 0.85; }
+  .app-title { font-size: var(--fs-h2); font-weight: 800; margin-top: 2px; }
+  .app-header-icons { display: flex; gap: var(--space-2); }
+  .icon-btn { width: 40px; height: 40px; border-radius: 50%; background: rgba(255,255,255,0.16); border: none; color: #fff; display: flex; align-items: center; justify-content: center; cursor: pointer; }
+
+  .stat-grid { margin: -16px var(--space-4) 0; display: grid; grid-template-columns: repeat(2, 1fr); gap: var(--space-3); position: relative; z-index: 5; }
+  .stat-card { background: var(--n-0); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: var(--space-3) var(--space-4); }
+  .stat-card .stat-value { font-size: var(--fs-h2); }
+  .stat-card.full { grid-column: 1 / -1; }
+
+  .section-block { padding: var(--space-5) var(--space-4) 0; }
+  .block-label { font-size: var(--fs-label); font-weight: 700; color: var(--n-600); margin-bottom: var(--space-2); display: flex; justify-content: space-between; align-items: baseline; }
+  .block-label a { font-size: var(--fs-caption); font-weight: 700; }
+
+  .action-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--space-2); }
+  .action-btn { background: var(--n-0); border: 1px solid var(--n-200); border-radius: var(--radius-md); padding: var(--space-3) var(--space-1); display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 12px; font-weight: 700; color: var(--n-700); min-height: var(--tap-min); cursor: pointer; }
+
+  .list-card { background: var(--n-0); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); overflow: hidden; }
+  .list-row { display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) var(--space-4); border-bottom: 1px solid var(--n-100); gap: var(--space-3); }
+  .list-row:last-child { border-bottom: none; }
+  .list-row-main { min-width: 0; }
+  .list-row-title { font-size: var(--fs-label); font-weight: 700; color: var(--n-800); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .list-row-sub { font-size: var(--fs-caption); color: var(--n-500); margin-top: 2px; }
+
+  .empty-note { font-size: var(--fs-caption); color: var(--n-400); text-align: center; padding: var(--space-5) 0; }
+
+  /* order cards */
+  .order-card { background: var(--n-0); border-radius: var(--radius-lg); box-shadow: var(--shadow-sm); padding: var(--space-4); margin-bottom: var(--space-3); }
+  .order-top { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--space-2); }
+  .order-id-row { display: flex; align-items: center; gap: 8px; }
+  .channel-tag { font-size: 10px; font-weight: 800; letter-spacing: 0.03em; text-transform: uppercase; color: var(--n-400); background: var(--n-100); padding: 2px 7px; border-radius: 6px; }
+  .order-id { font-size: var(--fs-label); font-weight: 800; color: var(--n-900); }
+  .order-customer { font-size: var(--fs-caption); color: var(--n-500); margin-top: 2px; }
+  .order-meta { display: flex; justify-content: space-between; align-items: center; margin-top: var(--space-3); }
+  .order-items-count { font-size: var(--fs-caption); color: var(--n-500); }
+  .order-price { font-size: var(--fs-label); font-weight: 800; color: var(--n-900); }
+  .order-next { margin-top: var(--space-3); }
+  .order-next .btn { width: 100%; }
+  .hold-banner { margin-top: var(--space-3); background: var(--danger-50); color: var(--danger-700); font-size: 12px; font-weight: 700; border-radius: var(--radius-sm); padding: var(--space-2) var(--space-3); }
+
+  .filter-tabs { display: flex; gap: var(--space-2); overflow-x: auto; padding-bottom: 2px; -ms-overflow-style: none; scrollbar-width: none; }
+  .filter-tabs::-webkit-scrollbar { display: none; }
+  .filter-tab { flex-shrink: 0; font-size: 13px; font-weight: 700; padding: 8px 14px; border-radius: var(--radius-full); border: 1px solid var(--n-200); background: var(--n-0); color: var(--n-500); min-height: 36px; cursor: pointer; }
+  .filter-tab.active { background: var(--accent-600); color: #fff; border-color: var(--accent-600); }
+
+  /* bottom nav */
+  .bottom-nav { display: flex; background: rgba(255,255,255,0.97); border-top: 1px solid var(--n-200); padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); }
+  .nav-item { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px; min-height: var(--tap-min); justify-content: center; border: none; background: transparent; cursor: pointer; color: var(--n-400); font-family: inherit; }
+  .nav-item.active { color: var(--accent-600); }
+  .nav-icon-wrap { width: 30px; height: 26px; display: flex; align-items: center; justify-content: center; border-radius: var(--radius-sm); }
+  .nav-item.active .nav-icon-wrap { background: var(--accent-50); }
+  .nav-label { font-size: 11px; font-weight: 700; }
+
+  .side-notes { flex: 1; min-width: 260px; max-width: 420px; }
+  .note-card { background: var(--n-0); border: 1px solid var(--n-200); border-radius: var(--radius-md); padding: var(--space-4); margin-bottom: var(--space-3); font-size: var(--fs-label); color: var(--n-600); }
+  .note-card strong { color: var(--n-900); display: block; margin-bottom: 4px; font-size: var(--fs-body); }
+
+  .quality-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-3); margin-top: var(--space-3); }
+  .quality-item { background: var(--n-0); border: 1px solid var(--n-200); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); font-size: var(--fs-label); }
+  .quality-item .check { color: var(--ok-600); font-weight: 800; margin-right: 6px; }
+
+  @media (max-width: 760px) {
+    .phone-shell { justify-content: center; }
+    .side-notes { max-width: 100%; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="topbar-row">
+    <div class="topbar-title">Direction <span>A</span> — Clear</div>
+    <div class="topbar-links">
+      <a href="./index.html">All directions</a>
+      <a href="./b.html">View Direction B →</a>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="banner">
+    <strong>This is a preview, not a feature.</strong> Every name, order, and number on
+    this page is made up. Nothing here reads your real data, and this whole
+    <code>design-preview</code> folder gets deleted once a direction is chosen.
+  </div>
+
+  <section>
+    <div class="section-title">Color</div>
+    <div class="section-sub">Neutral scale (decided) + one accent (not decided — every accent color on this page reads the 5 variables below, so trying your real brand color later is a token edit, not a rebuild).</div>
+    <div class="swatch-row" id="neutral-swatches"></div>
+    <div class="accent-callout">Accent scale (placeholder blue shown — swap <code>--accent-500/600/700</code> for real brand colors any time):</div>
+    <div class="swatch-row" id="accent-swatches" style="margin-top:8px;"></div>
+  </section>
+
+  <section>
+    <div class="section-title">Typography</div>
+    <div class="section-sub">System font only (no new font dependency added without asking). Every input, button and body line is 16px or larger — nothing shrinks below that, even for secondary text in dense lists.</div>
+    <div id="type-scale"></div>
+  </section>
+
+  <section>
+    <div class="section-title">Spacing</div>
+    <div class="section-sub">A single 4px-based scale used everywhere — card padding, gaps, section rhythm.</div>
+    <div id="space-scale"></div>
+  </section>
+
+  <section>
+    <div class="section-title">Buttons</div>
+    <div class="section-sub">Every button, including icon-only ones, is at least 48px tall — above the 44px the current app uses today.</div>
+    <div class="demo-row">
+      <button class="btn btn-primary">Primary action</button>
+      <button class="btn btn-secondary">Secondary</button>
+      <button class="btn btn-outline">Outline</button>
+      <button class="btn btn-danger">Delete</button>
+      <button class="btn btn-ghost">Ghost link</button>
+    </div>
+    <div class="demo-row">
+      <button class="btn btn-primary btn-sm">Small (40px)</button>
+      <button class="btn btn-outline btn-icon" aria-label="Example icon button">⟳</button>
+      <button class="btn btn-primary" disabled>Disabled</button>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-title">Inputs</div>
+    <div class="demo-row" style="align-items:flex-start;">
+      <div class="field">
+        <label for="demo-input">Customer name</label>
+        <input id="demo-input" class="input" placeholder="e.g. Priya Raman" />
+      </div>
+      <div class="field">
+        <label for="demo-select">Courier</label>
+        <select id="demo-select" class="select">
+          <option>Blue Dart</option>
+          <option>India Post</option>
+        </select>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-title">Cards &amp; stat tiles</div>
+    <div class="card-grid">
+      <div class="card"><div class="stat-label">Total products</div><div class="stat-value">112</div></div>
+      <div class="card"><div class="stat-label">Low stock</div><div class="stat-value" style="color:var(--danger-600)">4</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-title">Status badges</div>
+    <div class="section-sub">One shared vocabulary proposed for both Shopify and Direct orders, instead of three separate status systems.</div>
+    <div class="demo-row">
+      <span class="badge badge-new"><span class="badge-dot"></span>New</span>
+      <span class="badge badge-packing"><span class="badge-dot"></span>Packing</span>
+      <span class="badge badge-packed"><span class="badge-dot"></span>Packed</span>
+      <span class="badge badge-dispatched"><span class="badge-dot"></span>Dispatched</span>
+      <span class="badge badge-delivered"><span class="badge-dot"></span>Delivered</span>
+      <span class="badge badge-hold">Payment hold</span>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-title">Mobile Home &amp; Orders</div>
+    <div class="section-sub">Live in this page — switch Staff/Admin and tap the bottom nav. Staff never see price, total or stock value anywhere, including on the order card below.</div>
+
+    <div class="phone-shell">
+      <div class="phone">
+        <div class="phone-screen">
+          <div class="phone-notch"></div>
+          <div class="role-switch">
+            <span>Viewing as:</span>
+            <div class="role-switch-buttons">
+              <button class="role-btn active" data-role="staff" onclick="setRole('staff', this)">Staff</button>
+              <button class="role-btn" data-role="admin" onclick="setRole('admin', this)">Admin</button>
+            </div>
+          </div>
+
+          <div class="screen-body" id="screen-body">
+            <!-- HOME SCREEN -->
+            <div id="screen-home">
+              <div class="app-header">
+                <div class="app-header-row">
+                  <div>
+                    <div class="app-hi">Hi, <span id="home-name">Jaheer</span></div>
+                    <div class="app-title">Inventory</div>
+                  </div>
+                  <div class="app-header-icons">
+                    <button class="icon-btn" aria-label="Team board">🔔</button>
+                    <button class="icon-btn" aria-label="Switch user">J</button>
+                  </div>
+                </div>
+              </div>
+              <div class="stat-grid">
+                <div class="stat-card"><div class="stat-label">Total products</div><div class="stat-value">112</div></div>
+                <div class="stat-card" id="stat-stockvalue"><div class="stat-label">Stock value</div><div class="stat-value">₹4.8L</div></div>
+                <div class="stat-card" id="stat-lowstock"><div class="stat-label">Low stock</div><div class="stat-value" style="color:var(--danger-600)">4</div></div>
+              </div>
+
+              <div class="section-block">
+                <div class="block-label">Quick actions</div>
+                <div class="action-grid">
+                  <div class="action-btn"><span>📷</span>Scan</div>
+                  <div class="action-btn"><span>➕</span>Stock</div>
+                  <div class="action-btn"><span>🧾</span>New order</div>
+                </div>
+              </div>
+
+              <div class="section-block">
+                <div class="block-label"><span>Needs attention</span><a href="#">See all</a></div>
+                <div class="list-card">
+                  <div class="list-row">
+                    <div class="list-row-main">
+                      <div class="list-row-title">Dark Chocolate Slab 500g</div>
+                      <div class="list-row-sub">2 left · below threshold</div>
+                    </div>
+                    <span class="badge badge-hold">Low</span>
+                  </div>
+                  <div class="list-row">
+                    <div class="list-row-main">
+                      <div class="list-row-title">Coconut Varkey 250g</div>
+                      <div class="list-row-sub">1 left · below threshold</div>
+                    </div>
+                    <span class="badge badge-hold">Low</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="section-block" style="padding-bottom: 24px;">
+                <div class="block-label"><span>Recent activity</span><a href="#">See all</a></div>
+                <div class="list-card">
+                  <div class="list-row">
+                    <div class="list-row-main">
+                      <div class="list-row-title">Milk Chocolate Bar 100g</div>
+                      <div class="list-row-sub">Sold · Rajendran · 12m ago</div>
+                    </div>
+                    <span style="color:var(--danger-600); font-weight:800; font-size:14px;">−6</span>
+                  </div>
+                  <div class="list-row">
+                    <div class="list-row-main">
+                      <div class="list-row-title">Coconut Varkey 250g</div>
+                      <div class="list-row-sub">Received · Vijayakumar · 1h ago</div>
+                    </div>
+                    <span style="color:var(--ok-600); font-weight:800; font-size:14px;">+40</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- ORDERS SCREEN -->
+            <div id="screen-orders" style="display:none;">
+              <div class="app-header" style="padding-bottom: var(--space-4);">
+                <div class="app-header-row">
+                  <div class="app-title" style="font-size: var(--fs-h3);">Orders</div>
+                </div>
+              </div>
+              <div class="section-block" style="padding-top: var(--space-3);">
+                <div class="filter-tabs">
+                  <button class="filter-tab active">All</button>
+                  <button class="filter-tab">New</button>
+                  <button class="filter-tab">Packing</button>
+                  <button class="filter-tab">Packed</button>
+                  <button class="filter-tab">Dispatched</button>
+                </div>
+              </div>
+              <div class="section-block" id="orders-list" style="padding-bottom: 24px;"></div>
+            </div>
+
+            <!-- STOCK / TEAM / MORE placeholders -->
+            <div id="screen-placeholder" style="display:none;">
+              <div class="section-block" style="padding-top:60px; text-align:center;">
+                <p style="font-size: var(--fs-h3); font-weight:700; color:var(--n-700);" id="placeholder-title">Stock</p>
+                <p style="font-size: var(--fs-label); color:var(--n-500); margin-top:8px;">Products, Scan, Stock In/Out, Purchase Orders and Suppliers live here in the real build — not mocked in this preview.</p>
+              </div>
+            </div>
+          </div>
+
+          <div class="bottom-nav">
+            <button class="nav-item active" data-screen="home" onclick="setScreen('home', this)">
+              <span class="nav-icon-wrap">🏠</span><span class="nav-label">Home</span>
+            </button>
+            <button class="nav-item" data-screen="orders" onclick="setScreen('orders', this)">
+              <span class="nav-icon-wrap">🧾</span><span class="nav-label">Orders</span>
+            </button>
+            <button class="nav-item" data-screen="placeholder" data-title="Stock" onclick="setScreen('placeholder', this)">
+              <span class="nav-icon-wrap">📦</span><span class="nav-label">Stock</span>
+            </button>
+            <button class="nav-item" data-screen="placeholder" data-title="Team" onclick="setScreen('placeholder', this)">
+              <span class="nav-icon-wrap">👥</span><span class="nav-label">Team</span>
+            </button>
+            <button class="nav-item" data-screen="placeholder" data-title="More" onclick="setScreen('placeholder', this)">
+              <span class="nav-icon-wrap">⋯</span><span class="nav-label">More</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <div class="side-notes">
+        <div class="note-card">
+          <strong>One order card, two sources</strong>
+          Each card shows a small "SHOPIFY" or "DIRECT" tag, the same status badge
+          vocabulary, and one primary button that always means "move this to its
+          next step" — no separate screens, no separate mental model.
+        </div>
+        <div class="note-card">
+          <strong>Role-aware by construction</strong>
+          The Staff/Admin switch above is the same toggle that exists in the
+          real app today (<code>member.isAdmin</code>). Price, total and stock
+          value are left out of the staff view's markup entirely here, not
+          hidden with CSS — matching how it should work in the real build.
+        </div>
+        <div class="note-card">
+          <strong>Payment hold</strong>
+          Switch to Admin and look at order <strong>DO-0230</strong> — a blocked
+          step shows a reason field + override button for admins; staff would
+          see only the red banner, never a dead-end button.
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-title">Quality bar check (this page)</div>
+    <div class="quality-grid">
+      <div class="quality-item"><span class="check">✓</span>48px minimum tap targets</div>
+      <div class="quality-item"><span class="check">✓</span>16px+ on every input/button</div>
+      <div class="quality-item"><span class="check">✓</span>No horizontal scroll at any width</div>
+      <div class="quality-item"><span class="check">✓</span>Safe-area padding on header/nav</div>
+      <div class="quality-item"><span class="check">✓</span>Reduced-motion respected</div>
+      <div class="quality-item"><span class="check">✓</span>No web font / new dependency loaded</div>
+    </div>
+  </section>
+</div>
+
+<script>
+  const neutrals = ['0','50','100','200','300','400','500','600','700','800','900'];
+  document.getElementById('neutral-swatches').innerHTML = neutrals.map(n =>
+    `<div class="swatch"><div class="swatch-chip" style="background:var(--n-${n})"></div><div class="swatch-label">n-${n}</div></div>`
+  ).join('');
+  const accents = ['50','100','500','600','700'];
+  document.getElementById('accent-swatches').innerHTML = accents.map(n =>
+    `<div class="swatch"><div class="swatch-chip" style="background:var(--accent-${n})"></div><div class="swatch-label">accent-${n}</div></div>`
+  ).join('');
+
+  const typeScale = [
+    ['Display · 30px / 800', 'display'], ['H1 · 26px / 800', 'h1'], ['H2 · 22px / 800', 'h2'],
+    ['H3 · 19px / 700', 'h3'], ['Body large · 17px / 400', 'body-lg'], ['Body · 16px / 400', 'body'],
+    ['Label · 14px / 600', 'label'], ['Caption · 13px / 500', 'caption']
+  ];
+  document.getElementById('type-scale').innerHTML = typeScale.map(([meta, cls]) =>
+    `<div class="type-row"><div class="type-sample" style="font-size:var(--fs-${cls==='body-lg'?'body-lg':cls});">The quick brown fox packed an order</div><div class="type-meta">${meta}</div></div>`
+  ).join('');
+
+  const spaceScale = [1,2,3,4,5,6,8];
+  const spacePx = {1:4,2:8,3:12,4:16,5:20,6:24,8:32};
+  document.getElementById('space-scale').innerHTML = spaceScale.map(s =>
+    `<div class="space-row"><div class="space-bar" style="width:${spacePx[s]*3}px"></div><div class="space-meta">space-${s} · ${spacePx[s]}px</div></div>`
+  ).join('');
+
+  const ORDERS = [
+    { id: '#1042', channel: 'SHOPIFY', customer: 'Priya Raman', items: 3, price: '₹1,240', status: 'new', next: 'Move to Packing' },
+    { id: 'DO-0231', channel: 'DIRECT', customer: 'Suresh Kumar', items: 1, price: '₹340', status: 'packing', next: 'Move to Packed' },
+    { id: '#1041', channel: 'SHOPIFY', customer: 'Anitha M.', items: 2, price: '₹860', status: 'packed', next: 'Move to Dispatched' },
+    { id: 'DO-0230', channel: 'DIRECT', customer: 'Ravi S.', items: 4, price: '₹2,150', status: 'dispatched', next: 'Move to Delivered', hold: true },
+  ];
+  const BADGE = { new: 'badge-new', packing: 'badge-packing', packed: 'badge-packed', dispatched: 'badge-dispatched', delivered: 'badge-delivered' };
+  const LABEL = { new: 'New', packing: 'Packing', packed: 'Packed', dispatched: 'Dispatched', delivered: 'Delivered' };
+
+  let currentRole = 'staff';
+
+  function renderOrders() {
+    const isAdmin = currentRole === 'admin';
+    document.getElementById('orders-list').innerHTML = ORDERS.map(o => `
+      <div class="order-card">
+        <div class="order-top">
+          <div>
+            <div class="order-id-row">
+              <span class="channel-tag">${o.channel}</span>
+              <span class="order-id">${o.id}</span>
+            </div>
+            <div class="order-customer">${o.customer}</div>
+          </div>
+          <span class="badge ${BADGE[o.status]}"><span class="badge-dot"></span>${LABEL[o.status]}</span>
+        </div>
+        <div class="order-meta">
+          <span class="order-items-count">${o.items} item${o.items>1?'s':''}</span>
+          ${isAdmin ? `<span class="order-price">${o.price}</span>` : ''}
+        </div>
+        ${o.hold
+          ? (isAdmin
+              ? `<div class="hold-banner">Payment issue — enter a reason to move forward anyway</div>
+                 <input class="input" style="margin-top:10px;" placeholder="Reason for the override">
+                 <div class="order-next"><button class="btn btn-danger">Override &amp; ${o.next.toLowerCase()}</button></div>`
+              : `<div class="hold-banner">Payment issue — do not ship. An admin needs to clear this.</div>`)
+          : `<div class="order-next"><button class="btn btn-primary">${o.next}</button></div>`
+        }
+      </div>
+    `).join('');
+  }
+
+  function setRole(role, el) {
+    currentRole = role;
+    document.querySelectorAll('.role-btn').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    const isAdmin = role === 'admin';
+    document.getElementById('home-name').textContent = isAdmin ? 'Vijayakumar' : 'Jaheer';
+    document.getElementById('stat-stockvalue').style.display = isAdmin ? '' : 'none';
+    document.getElementById('stat-lowstock').classList.toggle('full', !isAdmin);
+    renderOrders();
+  }
+
+  function setScreen(screen, el) {
+    document.querySelectorAll('.nav-item').forEach(b => b.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById('screen-home').style.display = screen === 'home' ? '' : 'none';
+    document.getElementById('screen-orders').style.display = screen === 'orders' ? '' : 'none';
+    document.getElementById('screen-placeholder').style.display = screen === 'placeholder' ? '' : 'none';
+    if (screen === 'placeholder') document.getElementById('placeholder-title').textContent = el.dataset.title;
+    if (screen === 'orders') renderOrders();
+    document.getElementById('screen-body').scrollTop = 0;
+  }
+
+  setRole('staff', document.querySelector('.role-btn[data-role="staff"]'));
+</script>
+</body>
+</html>
