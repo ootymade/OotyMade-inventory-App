@@ -57,25 +57,42 @@ alter table team_notices enable row level security;
 alter table team_notice_seen enable row level security;
 alter table order_notes enable row level security;
 
+-- Every policy below requires an existing team_members row for the
+-- caller, not just "authenticated" — a signed-in stranger with no
+-- team_members row must be rejected the same way an anonymous caller
+-- is, on every branch.
 create policy "visible to staff, all to admins" on team_notices
   for select to authenticated
-  using (hidden_at is null or exists (select 1 from team_members where id = (select auth.uid()) and role = 'admin'));
+  using (
+    exists (select 1 from team_members where id = (select auth.uid()))
+    and (hidden_at is null or exists (select 1 from team_members where id = (select auth.uid()) and role = 'admin'))
+  );
 create policy "admins post" on team_notices
   for insert to authenticated
   with check (created_by = (select auth.uid()) and exists (select 1 from team_members where id = (select auth.uid()) and role = 'admin'));
 
 create policy "team members can read seen" on team_notice_seen
-  for select to authenticated using (true);
+  for select to authenticated
+  using (exists (select 1 from team_members where id = (select auth.uid())));
 create policy "members mark their own seen" on team_notice_seen
   for insert to authenticated
-  with check (team_member_id = (select auth.uid()));
+  with check (
+    team_member_id = (select auth.uid())
+    and exists (select 1 from team_members where id = (select auth.uid()))
+  );
 
 create policy "visible to staff, all to admins" on order_notes
   for select to authenticated
-  using (hidden_at is null or exists (select 1 from team_members where id = (select auth.uid()) and role = 'admin'));
+  using (
+    exists (select 1 from team_members where id = (select auth.uid()))
+    and (hidden_at is null or exists (select 1 from team_members where id = (select auth.uid()) and role = 'admin'))
+  );
 create policy "members add notes" on order_notes
   for insert to authenticated
-  with check (created_by = (select auth.uid()));
+  with check (
+    created_by = (select auth.uid())
+    and exists (select 1 from team_members where id = (select auth.uid()))
+  );
 
 -- A new table created here gets a standing default that hands
 -- authenticated every privilege automatically — revoke that first,
