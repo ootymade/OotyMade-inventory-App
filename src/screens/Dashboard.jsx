@@ -149,10 +149,12 @@ export default function Dashboard() {
           <p className="text-xs font-medium text-slate-400">Total products</p>
           <p className="mt-1 text-2xl font-bold text-slate-900">{stats.totalProducts}</p>
         </Card>
-        <Card className="!p-4">
-          <p className="text-xs font-medium text-slate-400">Stock value</p>
-          <p className="mt-1 text-2xl font-bold text-slate-900">{formatMoney(stats.totalStockValue)}</p>
-        </Card>
+        {member?.isAdmin && (
+          <Card className="!p-4">
+            <p className="text-xs font-medium text-slate-400">Stock value</p>
+            <p className="mt-1 text-2xl font-bold text-slate-900">{formatMoney(stats.totalStockValue)}</p>
+          </Card>
+        )}
         <Link to="/products?filter=low-stock">
           <Card className="!p-4">
             <p className="text-xs font-medium text-slate-400">Low stock</p>
@@ -161,7 +163,7 @@ export default function Dashboard() {
             </p>
           </Card>
         </Link>
-        <Card className="!p-4">
+        <Card className={`!p-4 ${member?.isAdmin ? '' : 'col-span-2'}`}>
           <p className="text-xs font-medium text-slate-400">Last activity</p>
           <p className="mt-1 truncate text-sm font-bold text-slate-900">
             {timeAgo(stats.recentActivity[0]?.timestamp)}
