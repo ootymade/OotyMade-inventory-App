@@ -68,7 +68,7 @@ export default function ProductDetail() {
     )
   }
 
-  const low = product.quantity <= product.lowStockThreshold
+  const low = product.hasBeenCounted && product.quantity <= product.lowStockThreshold
 
   return (
     <div className="pb-8">
@@ -104,6 +104,11 @@ export default function ProductDetail() {
               </p>
             )}
             {low && <Badge tone="danger">Below threshold ({product.lowStockThreshold})</Badge>}
+            {!product.hasBeenCounted && (
+              <p className="mt-1 text-xs text-amber-600">
+                No physical count yet — enter today's pack count via Stock In, reason "Adjustment (count correction)"
+              </p>
+            )}
           </div>
         </Card>
 

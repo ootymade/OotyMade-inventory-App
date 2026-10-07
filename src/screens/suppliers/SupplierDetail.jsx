@@ -107,7 +107,7 @@ export default function SupplierDetail() {
                     <p className="truncate text-sm font-semibold text-slate-800">{p.name}</p>
                     <p className="text-xs text-slate-400">{p.sku}</p>
                   </div>
-                  <Badge tone={p.quantity <= p.lowStockThreshold ? 'danger' : 'slate'}>
+                  <Badge tone={p.hasBeenCounted && p.quantity <= p.lowStockThreshold ? 'danger' : 'slate'}>
                     {p.quantity} {p.unit}
                   </Badge>
                 </Link>

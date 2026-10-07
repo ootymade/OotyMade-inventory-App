@@ -26,6 +26,7 @@ function rowToProduct(row) {
     photo: row.photo || '',
     hsnCode: row.hsn_code || '1806',
     packSizeGrams: row.pack_size_grams != null ? Number(row.pack_size_grams) : null,
+    hasBeenCounted: row.has_been_counted !== false,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   }
@@ -373,16 +374,22 @@ export async function receivePurchaseOrder(id, received, member) {
 // Dashboard aggregates
 // ---------------------------------------------------------------------------
 
+// A product only counts as "low stock" once it has a real count behind it
+// (has_been_counted flips true on its first ever stock movement) — a
+// freshly created product sitting at 0 awaiting its opening physical count
+// is not yet meaningfully "low", it's just uncounted.
 export async function getLowStockProducts() {
   const items = await listProducts()
-  return items.filter((p) => p.quantity <= p.lowStockThreshold).sort((a, b) => a.quantity - b.quantity)
+  return items
+    .filter((p) => p.hasBeenCounted && p.quantity <= p.lowStockThreshold)
+    .sort((a, b) => a.quantity - b.quantity)
 }
 
 export async function getDashboardStats() {
   const [products, recentActivity] = await Promise.all([listProducts(), listMovements({ limit: 10 })])
   const totalProducts = products.length
   const totalStockValue = products.reduce((s, p) => s + p.quantity * (p.unitCost || 0), 0)
-  const lowStock = products.filter((p) => p.quantity <= p.lowStockThreshold)
+  const lowStock = products.filter((p) => p.hasBeenCounted && p.quantity <= p.lowStockThreshold)
   return {
     totalProducts,
     totalStockValue,

@@ -161,7 +161,7 @@ export default function Dashboard() {
           </div>
           <Card className="divide-y divide-slate-100 !p-0">
             {featuredProducts.map((p) => {
-              const low = p.quantity <= p.lowStockThreshold
+              const low = p.hasBeenCounted && p.quantity <= p.lowStockThreshold
               return (
                 <Link key={p.id} to={`/products/${p.id}`} className="flex items-center justify-between px-4 py-3">
                   <div className="min-w-0">

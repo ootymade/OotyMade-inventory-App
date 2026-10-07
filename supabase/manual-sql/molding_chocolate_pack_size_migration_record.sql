@@ -1,0 +1,100 @@
+-- ============================================================================
+-- RECORD ONLY — nothing in this file needs to be run. It documents a
+-- migration that already happened (2026-09-23, commit e5706b6, "Add
+-- pack-size tracking for weight-based products"), for reconciliation
+-- against the team's physical counts. Reconstructed from the session
+-- transcript and the exact SQL that was run, not from memory.
+-- ============================================================================
+
+-- ----------------------------------------------------------------------------
+-- WHAT WAS ASKED, AND WHAT YOU ANSWERED (both questions were answered at the
+-- time, via the interactive question prompt — neither was an assumption on
+-- my part):
+--
+--   Q1 (Scope): "Should this pack-size + auto-computed-weight pattern apply
+--   to every weight-tracked product, or only Molding Chocolate for now?"
+--   -> You chose: "All weight-tracked products" (the recommended option).
+--   This is why the feature was built as a general `pack_size_grams` column
+--   usable by any product, not a Molding-Chocolate-specific field.
+--
+--   Q2 (Pack count data): "I don't know your current real pack counts
+--   (500g vs 250g split per flavor) — how should I handle the migration?"
+--   -> You chose: "Start fresh at zero, we'll count physically" (not
+--   "I'll type in today's counts"). This is why all 12 new products were
+--   created at quantity 0 instead of a guessed split.
+-- ----------------------------------------------------------------------------
+
+-- ----------------------------------------------------------------------------
+-- WHAT WAS DELETED — exactly 6 rows from `products`, category
+-- 'Molding Chocolate', read from the database immediately before deletion:
+-- ----------------------------------------------------------------------------
+--
+--  old sku          | name                                    | unit | quantity | low_stock_threshold | unit_cost | hsn_code
+--  -----------------+-----------------------------------------+------+----------+----------------------+-----------+---------
+--  MOLD-WHITE       | Molding Chocolate - White                | g    | 2140     | 500                  | 0         | 1806
+--  MOLD-MILK        | Molding Chocolate - Milk                 | g    | 1420     | 500                  | 0         | 1806
+--  MOLD-ORANGE      | Molding Chocolate - Orange Flavour       | g    | 570      | 500                  | 0         | 1806
+--  MOLD-PINEAPPLE   | Molding Chocolate - Pineapple Flavour    | g    | 1750     | 500                  | 0         | 1806
+--  MOLD-STRAWBERRY  | Molding Chocolate - Strawberry Flavour   | g    | 3820     | 500                  | 0         | 1806
+--  MOLD-PISTA       | Molding Chocolate - Pista Flavour        | g    | 2250     | 500                  | 0         | 1806
+--
+-- Row counts affected by the delete:
+--   products deleted:        6
+--   movements cascade-deleted: 6  (each old product's own single "initial
+--                               stock" movement — nothing else referenced
+--                               them; movements.product_id is ON DELETE
+--                               CASCADE)
+--   invoice_items referencing these products: 0 (checked before deleting)
+--   purchase_orders referencing these products: 0 (checked today, after the
+--                               fact, against purchase_orders.items — a
+--                               JSONB column, not a foreign-keyed child
+--                               table, so this had to be checked separately
+--                               from the movements check)
+--
+-- No supplier link existed on any of the 6 (supplier_id was null on all).
+--
+-- ----------------------------------------------------------------------------
+-- WHAT WAS CREATED IN THEIR PLACE — 12 rows, 500g/250g x 6 flavors, all at
+-- quantity 0 (per your "start fresh, we'll count physically" answer):
+-- ----------------------------------------------------------------------------
+--
+--  new sku             | name                                       | unit | pack_size_grams | low_stock_threshold | hsn_code
+--  --------------------+--------------------------------------------+------+-----------------+----------------------+---------
+--  MOLD-WHITE-500       | Molding Chocolate - White - 500g            | pcs  | 500             | 5                    | 1806
+--  MOLD-WHITE-250       | Molding Chocolate - White - 250g            | pcs  | 250             | 5                    | 1806
+--  MOLD-MILK-500        | Molding Chocolate - Milk - 500g             | pcs  | 500             | 5                    | 1806
+--  MOLD-MILK-250        | Molding Chocolate - Milk - 250g             | pcs  | 250             | 5                    | 1806
+--  MOLD-ORANGE-500      | Molding Chocolate - Orange Flavour - 500g   | pcs  | 500             | 5                    | 1806
+--  MOLD-ORANGE-250      | Molding Chocolate - Orange Flavour - 250g   | pcs  | 250             | 5                    | 1806
+--  MOLD-PINEAPPLE-500   | Molding Chocolate - Pineapple Flavour - 500g| pcs  | 500             | 5                    | 1806
+--  MOLD-PINEAPPLE-250   | Molding Chocolate - Pineapple Flavour - 250g| pcs  | 250             | 5                    | 1806
+--  MOLD-STRAWBERRY-500  | Molding Chocolate - Strawberry Flavour - 500g| pcs | 500             | 5                    | 1806
+--  MOLD-STRAWBERRY-250  | Molding Chocolate - Strawberry Flavour - 250g| pcs | 250             | 5                    | 1806
+--  MOLD-PISTA-500       | Molding Chocolate - Pista Flavour - 500g    | pcs  | 500             | 5                    | 1806
+--  MOLD-PISTA-250       | Molding Chocolate - Pista Flavour - 250g    | pcs  | 250             | 5                    | 1806
+--
+-- All 12: quantity 0, unit_cost 0, category 'Molding Chocolate'.
+-- "GST" is not a stored product field in this app — GST rate is set per
+-- invoice line item at sale time (defaults to 5%, editable per line; see
+-- DEFAULT_GST_RATE in src/db/businessInfo.js), not on the product record.
+-- hsn_code (1806 — cocoa preparations) is the only tax-classification field
+-- stored on the product, same as every other chocolate item.
+--
+-- ----------------------------------------------------------------------------
+-- RECONCILIATION NOTE: the old "2140 g" style figures were bulk totals with
+-- no pack-count split recorded anywhere (not in this database, not in any
+-- file) — there was never a stored breakdown of e.g. "how many 500g vs
+-- 250g packs made up White's 2140g". The 12 new products starting at 0 is
+-- not a data-loss gap to fix; it's the deliberate "fresh physical count"
+-- path you chose over guessing a split.
+-- ----------------------------------------------------------------------------
+
+-- ----------------------------------------------------------------------------
+-- FOLLOW-UP ADDED 2026-10-07 (today), not part of the original migration:
+-- a `has_been_counted` boolean (default true) was added to `products`, set
+-- false specifically on these 12 rows, and wired into every low-stock
+-- check in the app so a product sitting at 0 with no real count yet does
+-- not show as "low stock" until its first real stock movement — see the
+-- accompanying report for detail. This file's SKU list above is also the
+-- exact set that got `has_been_counted = false`.
+-- ----------------------------------------------------------------------------

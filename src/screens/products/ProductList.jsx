@@ -39,7 +39,7 @@ export default function ProductList() {
 
   const visible = useMemo(() => {
     if (!products) return null
-    return lowStockOnly ? products.filter((p) => p.quantity <= p.lowStockThreshold) : products
+    return lowStockOnly ? products.filter((p) => p.hasBeenCounted && p.quantity <= p.lowStockThreshold) : products
   }, [products, lowStockOnly])
 
   const totalWeightGrams = useMemo(() => {
@@ -149,7 +149,7 @@ export default function ProductList() {
             )}
             <ul className="divide-y divide-slate-100 rounded-2xl bg-white shadow-sm ring-1 ring-slate-100">
               {visible.map((p) => {
-                const low = p.quantity <= p.lowStockThreshold
+                const low = p.hasBeenCounted && p.quantity <= p.lowStockThreshold
                 const weight = productWeightGrams(p)
                 return (
                   <li key={p.id}>
