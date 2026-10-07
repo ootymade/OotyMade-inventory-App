@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Ooty Inventory</title>
+    <script type="text/javascript">
+      // GitHub Pages serves this file for any path it doesn't recognize as
+      // a real file — which is every client-side route in this app (e.g. a
+      // deep link to /component-gallery or /products/abc123). Without this,
+      // a cold/direct visit to such a URL gets GitHub's real 404, and the
+      // app never loads at all (client-side routing only works once the
+      // app is already running). This redirects to the real index.html,
+      // encoding the intended path into a query string; index.html's own
+      // decode script (see index.html) restores it via history.replaceState
+      // before React Router mounts, so the deep link still lands correctly.
+      // Standard technique: https://github.com/rafgraph/spa-github-pages
+      var pathSegmentsToKeep = 1 // keeps "/OotyMade-inventory-App"
+      var l = window.location
+      l.replace(
+        l.protocol + '//' + l.hostname + (l.port ? ':' + l.port : '') +
+          l.pathname.split('/').slice(0, 1 + pathSegmentsToKeep).join('/') +
+          '/?/' +
+          l.pathname.slice(1).split('/').slice(pathSegmentsToKeep).join('/').replace(/&/g, '~and~') +
+          (l.search ? '&' + l.search.slice(1).replace(/&/g, '~and~') : '') +
+          l.hash,
+      )
+    </script>
+  </head>
+  <body></body>
+</html>
