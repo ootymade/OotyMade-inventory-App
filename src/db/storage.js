@@ -768,12 +768,23 @@ export async function getTodayOrderSummary() {
 }
 
 // ---------------------------------------------------------------------------
-// Shopify Orders (read-only sync) — reads go through shopify_orders_view /
+// Shopify Orders — reads go through shopify_orders_view /
 // shopify_order_items_view, never the base tables, so revenue columns come
 // back null for Staff at the database level (see supabase/schema.sql).
-// Writes to Shopify, and to shopify_orders itself, only ever happen inside
-// Supabase Edge Functions — this module only triggers a sync and reads.
+// Writes to Shopify, and the initial import into shopify_orders, only ever
+// happen inside Supabase Edge Functions. The one exception is workflow_status
+// itself (packing/packed/dispatched/etc.) — that's a staff-driven write from
+// this module, but only through set_shopify_order_workflow_status(), a
+// security-definer RPC that enforces who can move an order which way, never
+// a direct table write.
 // ---------------------------------------------------------------------------
+
+// Staff move forward one step at a time; only admins may move backward or
+// skip. "shipped" is kept as the stored value for backward compatibility —
+// WORKFLOW_LABELS is what every screen should display instead of the raw
+// column value.
+export const WORKFLOW_STEPS = ['new', 'packing', 'packed', 'shipped', 'delivered']
+export const WORKFLOW_LABELS = { new: 'New', packing: 'Packing', packed: 'Packed', shipped: 'Dispatched', delivered: 'Delivered' }
 
 function rowToShopifyOrder(row) {
   return {
@@ -792,6 +803,7 @@ function rowToShopifyOrder(row) {
     tags: row.tags || '',
     note: row.note || '',
     workflowStatus: row.workflow_status,
+    workflowUpdatedBy: row.workflow_updated_by,
     workflowUpdatedAt: row.workflow_updated_at,
     synced_at: row.synced_at,
     // Derived, non-revenue flag — visible to Staff too, unlike everything
@@ -838,6 +850,45 @@ export async function getShopifyOrderWithItems(id) {
   must(itemsError)
   if (!order) return undefined
   return { order: rowToShopifyOrder(order), items: (items || []).map(rowToShopifyOrderItem) }
+}
+
+// Every signed-in team member can already read the whole team_members table
+// (existing RLS policy, used by the old shared-login picker) — this just
+// gives "who has this order" a name instead of a uuid.
+export async function listTeamMemberNames() {
+  const { data, error } = await supabase.from('team_members').select('id, name')
+  must(error)
+  return data
+}
+
+// Moves a Shopify order's workflow_status forward (staff) or any direction
+// (admin) through set_shopify_order_workflow_status — a security-definer
+// RPC, not a direct table write. expectedStatus is the status the caller
+// last saw; the RPC rejects the change if someone else already moved the
+// order since (optimistic locking), and separately rejects any forward move
+// on a payment_hold order. Throws a specific, user-facing message for each.
+export async function setShopifyOrderWorkflowStatus({ orderId, newStatus, expectedStatus }) {
+  const { data, error } = await supabase.rpc('set_shopify_order_workflow_status', {
+    p_order_id: orderId,
+    p_new_status: newStatus,
+    p_expected_status: expectedStatus,
+  })
+  if (error) {
+    if (error.message?.includes('STALE:')) {
+      throw new Error('Someone else already updated this order — refresh and try again.')
+    }
+    if (error.message?.includes('PAYMENT_HOLD:')) {
+      throw new Error('This order has a payment issue and cannot be moved forward.')
+    }
+    if (error.message?.includes('FORWARD_ONLY:')) {
+      throw new Error('You can only move an order forward one step at a time.')
+    }
+    throw new Error(error.message || 'Could not update status')
+  }
+  const row = data?.[0]
+  return row
+    ? { workflowStatus: row.workflow_status, workflowUpdatedBy: row.workflow_updated_by, workflowUpdatedAt: row.workflow_updated_at }
+    : null
 }
 
 // Triggers the shopify-sync-orders Edge Function (backfill / manual

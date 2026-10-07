@@ -1,9 +1,16 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import { getShopifyOrderWithItems } from '../../db/storage.js'
+import {
+  getShopifyOrderWithItems,
+  setShopifyOrderWorkflowStatus,
+  listTeamMemberNames,
+  WORKFLOW_STEPS,
+  WORKFLOW_LABELS,
+} from '../../db/storage.js'
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
-import { PageHeader, Card, Badge, Spinner, EmptyState } from '../../components/ui.jsx'
+import { useToast } from '../../context/ToastContext.jsx'
+import { PageHeader, Card, Badge, Button, Spinner, EmptyState } from '../../components/ui.jsx'
 import { ShoppingBagIcon } from '../../components/icons.jsx'
 
 const REALTIME_TABLES = ['shopify_sync_ping']
@@ -27,8 +34,11 @@ function money(amount, currency) {
 export default function ShopifyOrderDetail() {
   const { id } = useParams()
   const { member } = useTeamMember()
+  const { push } = useToast()
   const [data, setData] = useState(null)
   const [notFound, setNotFound] = useState(false)
+  const [teamNames, setTeamNames] = useState({})
+  const [updating, setUpdating] = useState(false)
 
   const load = useCallback(async () => {
     const result = await getShopifyOrderWithItems(id)
@@ -43,7 +53,25 @@ export default function ShopifyOrderDetail() {
     load()
   }, [load])
 
+  useEffect(() => {
+    listTeamMemberNames().then((rows) => {
+      setTeamNames(Object.fromEntries(rows.map((r) => [r.id, r.name])))
+    })
+  }, [])
+
   useRealtimeRefresh(REALTIME_TABLES, load)
+
+  const moveTo = async (newStatus) => {
+    setUpdating(true)
+    try {
+      await setShopifyOrderWorkflowStatus({ orderId: data.order.id, newStatus, expectedStatus: data.order.workflowStatus })
+      await load()
+    } catch (err) {
+      push(err.message, { tone: 'error' })
+    } finally {
+      setUpdating(false)
+    }
+  }
 
   if (notFound) {
     return (
@@ -71,15 +99,49 @@ export default function ShopifyOrderDetail() {
 
       <Card className="space-y-2">
         <div className="flex items-center justify-between">
-          <Badge>{order.workflowStatus}</Badge>
+          <Badge>{WORKFLOW_LABELS[order.workflowStatus] || order.workflowStatus}</Badge>
           <Badge tone="brand">{(order.fulfillmentStatus || '').replace(/_/g, ' ').toLowerCase() || 'unknown'}</Badge>
         </div>
         <p className="text-xs text-slate-400">Placed {formatDate(order.createdAt)}</p>
+        {order.workflowUpdatedBy && (
+          <p className="text-xs text-slate-400">
+            Last moved by {teamNames[order.workflowUpdatedBy] || 'a team member'}
+            {order.workflowUpdatedAt && ` · ${formatDate(order.workflowUpdatedAt)}`}
+          </p>
+        )}
         {order.paymentHold && <p className="text-xs font-semibold text-danger-600">Payment issue — do not ship</p>}
         {order.cancelledAt && <p className="text-xs text-slate-400">Cancelled {formatDate(order.cancelledAt)}</p>}
         {member?.isAdmin && order.financialStatus && !['PAID', 'AUTHORIZED', 'PARTIALLY_REFUNDED'].includes(order.financialStatus) && (
           <p className="text-xs text-slate-400">Payment status: {order.financialStatus.toLowerCase()}</p>
         )}
+      </Card>
+
+      <Card className="space-y-2.5">
+        <p className="text-xs font-semibold text-slate-500">Workflow</p>
+        {order.paymentHold ? (
+          <p className="text-sm text-danger-600">This order has a payment issue — it cannot be moved forward until that's resolved.</p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {WORKFLOW_STEPS.map((step) => {
+              const stepIndex = WORKFLOW_STEPS.indexOf(step)
+              const currentIndex = WORKFLOW_STEPS.indexOf(order.workflowStatus)
+              if (step === order.workflowStatus) return null
+              // Staff only ever see the single next step forward; admins see
+              // every other step, forward or back.
+              if (!member?.isAdmin && stepIndex !== currentIndex + 1) return null
+              return (
+                <Button key={step} size="sm" variant={stepIndex > currentIndex ? 'primary' : 'outline'} onClick={() => moveTo(step)} disabled={updating}>
+                  {updating ? (
+                    <Spinner className="h-4 w-4" />
+                  ) : (
+                    `Move to ${WORKFLOW_LABELS[step]}${step === 'shipped' ? ' (not sent to Shopify)' : ''}`
+                  )}
+                </Button>
+              )
+            })}
+          </div>
+        )}
+        {order.workflowStatus === 'shipped' && <p className="text-xs text-slate-400">Dispatched — not yet sent to Shopify.</p>}
       </Card>
 
       <Card className="space-y-1.5 text-sm">

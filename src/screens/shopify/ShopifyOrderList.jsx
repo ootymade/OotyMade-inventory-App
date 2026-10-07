@@ -6,6 +6,7 @@ import {
   getShopifySyncSettings,
   saveShopifyFirstOrderNumber,
   runShopifyPaymentDiagnostics,
+  WORKFLOW_LABELS,
 } from '../../db/storage.js'
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
@@ -21,7 +22,7 @@ const STATUS_TABS = [
   { value: 'new', label: 'New' },
   { value: 'packing', label: 'Packing' },
   { value: 'packed', label: 'Packed' },
-  { value: 'shipped', label: 'Shipped' },
+  { value: 'shipped', label: 'Dispatched' },
   { value: 'delivered', label: 'Delivered' },
 ]
 
@@ -310,7 +311,7 @@ export default function ShopifyOrderList() {
                       {o.orderNumber} · {o.customerName || 'No name'}
                     </p>
                     <p className="truncate text-xs text-slate-400">
-                      {timeAgo(o.createdAt)} · {o.workflowStatus}
+                      {timeAgo(o.createdAt)} · {WORKFLOW_LABELS[o.workflowStatus] || o.workflowStatus}
                     </p>
                   </div>
                   <div className="shrink-0 text-right">
