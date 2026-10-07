@@ -782,9 +782,13 @@ export async function getTodayOrderSummary() {
 // Staff move forward one step at a time; only admins may move backward or
 // skip. "shipped" is kept as the stored value for backward compatibility —
 // WORKFLOW_LABELS is what every screen should display instead of the raw
-// column value.
+// column value. Packing/Packed/Dispatched are blocked on a payment_hold or
+// cancelled order; Delivered never is. An admin can move into a blocked
+// status anyway by supplying a reason (stored and shown in order detail) —
+// staff have no such override, at any status.
 export const WORKFLOW_STEPS = ['new', 'packing', 'packed', 'shipped', 'delivered']
 export const WORKFLOW_LABELS = { new: 'New', packing: 'Packing', packed: 'Packed', shipped: 'Dispatched', delivered: 'Delivered' }
+export const HOLD_BLOCKED_STEPS = ['packing', 'packed', 'shipped']
 
 function rowToShopifyOrder(row) {
   return {
@@ -805,6 +809,9 @@ function rowToShopifyOrder(row) {
     workflowStatus: row.workflow_status,
     workflowUpdatedBy: row.workflow_updated_by,
     workflowUpdatedAt: row.workflow_updated_at,
+    workflowHoldOverrideReason: row.workflow_hold_override_reason || '',
+    workflowHoldOverrideBy: row.workflow_hold_override_by,
+    workflowHoldOverrideAt: row.workflow_hold_override_at,
     synced_at: row.synced_at,
     // Derived, non-revenue flag — visible to Staff too, unlike everything
     // below. This is the only payment signal Staff get: enough to know not
@@ -865,17 +872,23 @@ export async function listTeamMemberNames() {
 // (admin) through set_shopify_order_workflow_status — a security-definer
 // RPC, not a direct table write. expectedStatus is the status the caller
 // last saw; the RPC rejects the change if someone else already moved the
-// order since (optimistic locking), and separately rejects any forward move
-// on a payment_hold order. Throws a specific, user-facing message for each.
-export async function setShopifyOrderWorkflowStatus({ orderId, newStatus, expectedStatus }) {
+// order since (optimistic locking). Packing/Packed/Dispatched are rejected
+// outright on a payment_hold order for anyone except an admin who passes a
+// non-empty overrideReason (stored on the order); Delivered is never
+// blocked, for anyone. Throws a specific, user-facing message for each case.
+export async function setShopifyOrderWorkflowStatus({ orderId, newStatus, expectedStatus, overrideReason }) {
   const { data, error } = await supabase.rpc('set_shopify_order_workflow_status', {
     p_order_id: orderId,
     p_new_status: newStatus,
     p_expected_status: expectedStatus,
+    p_override_reason: overrideReason || null,
   })
   if (error) {
     if (error.message?.includes('STALE:')) {
       throw new Error('Someone else already updated this order — refresh and try again.')
+    }
+    if (error.message?.includes('OVERRIDE_REASON_REQUIRED:')) {
+      throw new Error('Enter a reason to move this order forward despite the payment hold.')
     }
     if (error.message?.includes('PAYMENT_HOLD:')) {
       throw new Error('This order has a payment issue and cannot be moved forward.')
@@ -887,7 +900,14 @@ export async function setShopifyOrderWorkflowStatus({ orderId, newStatus, expect
   }
   const row = data?.[0]
   return row
-    ? { workflowStatus: row.workflow_status, workflowUpdatedBy: row.workflow_updated_by, workflowUpdatedAt: row.workflow_updated_at }
+    ? {
+        workflowStatus: row.workflow_status,
+        workflowUpdatedBy: row.workflow_updated_by,
+        workflowUpdatedAt: row.workflow_updated_at,
+        workflowHoldOverrideReason: row.workflow_hold_override_reason || '',
+        workflowHoldOverrideBy: row.workflow_hold_override_by,
+        workflowHoldOverrideAt: row.workflow_hold_override_at,
+      }
     : null
 }
 

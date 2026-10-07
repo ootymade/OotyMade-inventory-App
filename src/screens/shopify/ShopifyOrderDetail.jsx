@@ -6,11 +6,12 @@ import {
   listTeamMemberNames,
   WORKFLOW_STEPS,
   WORKFLOW_LABELS,
+  HOLD_BLOCKED_STEPS,
 } from '../../db/storage.js'
 import { useRealtimeRefresh } from '../../db/useRealtimeRefresh.js'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
-import { PageHeader, Card, Badge, Button, Spinner, EmptyState } from '../../components/ui.jsx'
+import { PageHeader, Card, Badge, Button, Input, Spinner, EmptyState } from '../../components/ui.jsx'
 import { ShoppingBagIcon } from '../../components/icons.jsx'
 
 const REALTIME_TABLES = ['shopify_sync_ping']
@@ -39,6 +40,7 @@ export default function ShopifyOrderDetail() {
   const [notFound, setNotFound] = useState(false)
   const [teamNames, setTeamNames] = useState({})
   const [updating, setUpdating] = useState(false)
+  const [overrideReasons, setOverrideReasons] = useState({})
 
   const load = useCallback(async () => {
     const result = await getShopifyOrderWithItems(id)
@@ -61,10 +63,16 @@ export default function ShopifyOrderDetail() {
 
   useRealtimeRefresh(REALTIME_TABLES, load)
 
-  const moveTo = async (newStatus) => {
+  const moveTo = async (newStatus, overrideReason) => {
     setUpdating(true)
     try {
-      await setShopifyOrderWorkflowStatus({ orderId: data.order.id, newStatus, expectedStatus: data.order.workflowStatus })
+      await setShopifyOrderWorkflowStatus({
+        orderId: data.order.id,
+        newStatus,
+        expectedStatus: data.order.workflowStatus,
+        overrideReason,
+      })
+      setOverrideReasons((r) => ({ ...r, [newStatus]: '' }))
       await load()
     } catch (err) {
       push(err.message, { tone: 'error' })
@@ -118,30 +126,65 @@ export default function ShopifyOrderDetail() {
 
       <Card className="space-y-2.5">
         <p className="text-xs font-semibold text-slate-500">Workflow</p>
-        {order.paymentHold ? (
-          <p className="text-sm text-danger-600">This order has a payment issue — it cannot be moved forward until that's resolved.</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {WORKFLOW_STEPS.map((step) => {
-              const stepIndex = WORKFLOW_STEPS.indexOf(step)
-              const currentIndex = WORKFLOW_STEPS.indexOf(order.workflowStatus)
-              if (step === order.workflowStatus) return null
-              // Staff only ever see the single next step forward; admins see
-              // every other step, forward or back.
-              if (!member?.isAdmin && stepIndex !== currentIndex + 1) return null
-              return (
-                <Button key={step} size="sm" variant={stepIndex > currentIndex ? 'primary' : 'outline'} onClick={() => moveTo(step)} disabled={updating}>
-                  {updating ? (
-                    <Spinner className="h-4 w-4" />
-                  ) : (
-                    `Move to ${WORKFLOW_LABELS[step]}${step === 'shipped' ? ' (not sent to Shopify)' : ''}`
-                  )}
-                </Button>
-              )
-            })}
-          </div>
+        {order.paymentHold && (
+          <p className="text-xs font-semibold text-danger-600">
+            {order.cancelledAt ? 'This order is cancelled.' : 'This order has a payment issue.'} Packing, Packed and
+            Dispatched are blocked{member?.isAdmin ? ' unless overridden below' : ''} — Delivered is not affected.
+          </p>
         )}
+        <div className="flex flex-wrap gap-2">
+          {WORKFLOW_STEPS.map((step) => {
+            const stepIndex = WORKFLOW_STEPS.indexOf(step)
+            const currentIndex = WORKFLOW_STEPS.indexOf(order.workflowStatus)
+            if (step === order.workflowStatus) return null
+            // Staff only ever see the single next step forward; admins see
+            // every other step, forward or back.
+            if (!member?.isAdmin && stepIndex !== currentIndex + 1) return null
+
+            const blocked = order.paymentHold && HOLD_BLOCKED_STEPS.includes(step)
+            // Staff have no override, at any status — the banner above
+            // already explains why, so just omit the button entirely.
+            if (blocked && !member?.isAdmin) return null
+
+            if (blocked && member?.isAdmin) {
+              return (
+                <div key={step} className="flex w-full items-center gap-2">
+                  <Input
+                    placeholder={`Reason to override and move to ${WORKFLOW_LABELS[step]}`}
+                    value={overrideReasons[step] || ''}
+                    onChange={(e) => setOverrideReasons((r) => ({ ...r, [step]: e.target.value }))}
+                    className="flex-1"
+                  />
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => moveTo(step, overrideReasons[step])}
+                    disabled={updating || !overrideReasons[step]?.trim()}
+                  >
+                    {updating ? <Spinner className="h-4 w-4" /> : 'Override'}
+                  </Button>
+                </div>
+              )
+            }
+
+            return (
+              <Button key={step} size="sm" variant={stepIndex > currentIndex ? 'primary' : 'outline'} onClick={() => moveTo(step)} disabled={updating}>
+                {updating ? (
+                  <Spinner className="h-4 w-4" />
+                ) : (
+                  `Move to ${WORKFLOW_LABELS[step]}${step === 'shipped' ? ' (not sent to Shopify)' : ''}`
+                )}
+              </Button>
+            )
+          })}
+        </div>
         {order.workflowStatus === 'shipped' && <p className="text-xs text-slate-400">Dispatched — not yet sent to Shopify.</p>}
+        {order.workflowHoldOverrideReason && (
+          <p className="text-xs text-slate-400">
+            Payment hold overridden by {teamNames[order.workflowHoldOverrideBy] || 'a team member'}
+            {order.workflowHoldOverrideAt && ` on ${formatDate(order.workflowHoldOverrideAt)}`}: "{order.workflowHoldOverrideReason}"
+          </p>
+        )}
       </Card>
 
       <Card className="space-y-1.5 text-sm">
