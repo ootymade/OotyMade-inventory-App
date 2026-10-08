@@ -161,7 +161,10 @@ export default function TeamNoticeBoard() {
       {notices === null ? (
         <Spinner className="h-5 w-5 text-brand-600" />
       ) : notices.length === 0 ? (
-        <EmptyState title="No announcements yet" subtitle="Nothing posted so far" />
+        <EmptyState
+          title="No announcements yet"
+          subtitle="Nothing posted so far. This board is announcements only — chat and file uploads aren't available here yet."
+        />
       ) : (
         <div className="space-y-3">
           {notices.map((n) => (
