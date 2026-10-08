@@ -49,6 +49,28 @@ function Tile({ to, icon: Icon, label, value }) {
   )
 }
 
+// Team Board's own tile: an unseen-count badge instead of a plain number,
+// plus a one-line pinned-announcement preview. pinnedNotice is null both
+// when nothing is pinned and when the Team Board tables don't exist yet
+// (getHomeSummary already swallows that failure) — either way "No pinned
+// announcement" is the right, friendly thing to show, never an error.
+function TeamTile({ unseen, pinnedNotice }) {
+  return (
+    <Link to="/team-board" className="flex flex-col items-start gap-2 rounded-[var(--radius-lg)] bg-white p-4 shadow-[0_2px_8px_rgba(28,25,23,0.07)]">
+      <div className="relative flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 text-brand-700">
+        <BellIcon className="h-5 w-5" />
+        {unseen > 0 && (
+          <span className="absolute -right-1 -top-1 flex h-4 w-4 items-center justify-center rounded-full bg-danger-600 text-[10px] font-bold text-white">
+            {unseen > 9 ? '9+' : unseen}
+          </span>
+        )}
+      </div>
+      <p className="text-xs font-semibold text-slate-500">Team Board</p>
+      <p className="line-clamp-1 text-xs text-slate-400">{pinnedNotice ? pinnedNotice.body : 'No pinned announcement'}</p>
+    </Link>
+  )
+}
+
 export default function Dashboard() {
   const { member, clearMember } = useTeamMember()
   const navigate = useNavigate()
@@ -74,7 +96,7 @@ export default function Dashboard() {
       <div className="p-4">
         <Skeleton className="h-10 w-40" />
         <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
-          {[0, 1, 2, 3, 4].map((i) => (
+          {[0, 1, 2, 3, 4, 5].map((i) => (
             <Skeleton key={i} className="h-24" />
           ))}
         </div>
@@ -138,6 +160,7 @@ export default function Dashboard() {
           {tiles.map((t) => (
             <Tile key={t.to} {...t} />
           ))}
+          <TeamTile unseen={unseenNotices} pinnedNotice={summary.pinnedNotice} />
         </div>
       </div>
 

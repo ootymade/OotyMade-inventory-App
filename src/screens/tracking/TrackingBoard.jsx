@@ -26,6 +26,11 @@ const TABS = [
   { value: 'delivered', label: 'Delivered' },
 ]
 
+const SORT_OPTIONS = [
+  { value: 'desc', label: 'Newest first' },
+  { value: 'asc', label: 'Oldest first' },
+]
+
 // A courier only counts as "verified" for the Track button when its link
 // actually embeds the tracking number (a deep link, or the opted-in
 // universal tracker) — not just a generic homepage URL with nothing to
@@ -56,6 +61,7 @@ export default function TrackingBoard() {
   const [entries, setEntries] = useState(null)
   const [couriers, setCouriers] = useState([])
   const [tab, setTab] = useState('needs_tracking')
+  const [sortDir, setSortDir] = useState('desc')
   const [editingKey, setEditingKey] = useState(null)
   const [draft, setDraft] = useState({ courierChoice: '', courierOther: '', tracking: '' })
   const [busyKey, setBusyKey] = useState(null)
@@ -158,13 +164,15 @@ export default function TrackingBoard() {
     delivered: entries.filter((e) => e.bucket === 'delivered').length,
   }
 
+  // "Dispatch time" per entry — lastEventAt already is that (the
+  // packed/shipped/delivered timestamp), falling back to orderDate when
+  // an order has no workflow timestamp at all (e.g. a backfilled order
+  // that never moved through our workflow).
+  const sortKey = (e) => new Date(e.lastEventAt || e.orderDate).getTime()
+
   const shown = entries
     .filter((e) => e.bucket === tab)
-    .sort((a, b) =>
-      tab === 'delivered'
-        ? new Date(b.lastEventAt).getTime() - new Date(a.lastEventAt).getTime()
-        : new Date(a.lastEventAt).getTime() - new Date(b.lastEventAt).getTime(),
-    )
+    .sort((a, b) => (sortDir === 'desc' ? sortKey(b) - sortKey(a) : sortKey(a) - sortKey(b)))
 
   return (
     <div className="pb-6">
@@ -175,6 +183,15 @@ export default function TrackingBoard() {
           options={TABS.map((t) => ({ ...t, label: `${t.label} (${counts[t.value]})` }))}
           value={tab}
           onChange={setTab}
+        />
+      </div>
+
+      <div className="px-4 pt-2">
+        <SegmentedControl
+          options={SORT_OPTIONS}
+          value={sortDir}
+          onChange={setSortDir}
+          className="!gap-1.5"
         />
       </div>
 

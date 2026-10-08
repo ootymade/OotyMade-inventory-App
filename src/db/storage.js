@@ -1197,6 +1197,7 @@ function buildTrackingEntries(shopify, invoices, shipments) {
       trackingNumber: shipment?.trackingNumber || '',
       shipmentUpdatedAt: shipment?.updatedAt || null,
       lastEventAt: o.workflowUpdatedAt || o.createdAt,
+      orderDate: o.createdAt,
       notSentToShopify: o.workflowStatus === 'shipped',
     })
   })
@@ -1217,6 +1218,7 @@ function buildTrackingEntries(shopify, invoices, shipments) {
       trackingNumber: shipment?.trackingNumber || '',
       shipmentUpdatedAt: shipment?.updatedAt || null,
       lastEventAt: inv.updatedAt,
+      orderDate: inv.createdAt,
       notSentToShopify: false,
     })
   })
