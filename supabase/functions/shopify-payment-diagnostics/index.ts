@@ -5,6 +5,12 @@
 // Writes nothing — not to shopify_orders, not anywhere else. Admin-only
 // (checked explicitly below, not just verify_jwt) since this is a
 // diagnostic tool, not part of the normal sync/webhook path.
+//
+// verify_jwt: true (intended and live). Still actively called — the
+// Shopify Orders screen's admin-only "Run payment diagnostics" button
+// (runShopifyPaymentDiagnostics() in src/db/storage.js) calls this
+// function directly. Not an orphan; do not disable without first
+// removing that button and its call site.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { adminClient, shopifyGraphql, getSyncSettings, getCallerTeamMember, parseOrderNumber, CORS_HEADERS } from '../_shared/shopify.ts'

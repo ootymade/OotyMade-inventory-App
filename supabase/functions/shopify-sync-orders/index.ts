@@ -5,6 +5,8 @@
 // idempotently upserts them — never writes to `products`, never creates a
 // Shopify fulfillment. Requires a valid Supabase session (verify_jwt stays
 // on), so only signed-in team members can trigger it.
+//
+// verify_jwt: true (intended and live).
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import {

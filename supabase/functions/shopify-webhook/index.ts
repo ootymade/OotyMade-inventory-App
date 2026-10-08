@@ -7,6 +7,8 @@
 // matter which path triggered it. verify_jwt is OFF for this function —
 // Shopify calls it directly with no Supabase session, authenticating via
 // HMAC instead.
+//
+// verify_jwt: false (intended and live) — HMAC is the only gate.
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts'
 import { adminClient, shopifyGraphql, upsertOrder, getSyncSettings, GET_ORDER_QUERY } from '../_shared/shopify.ts'
