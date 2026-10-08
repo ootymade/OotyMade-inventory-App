@@ -1,17 +1,18 @@
 import { NavLink } from 'react-router-dom'
-import { HomeIcon, ClipboardIcon, BoxIcon, BellIcon, MoreIcon } from './icons.jsx'
+import { HomeIcon, ClipboardIcon, PackageCheckIcon, BoxIcon, MoreIcon } from './icons.jsx'
 
-// Stage 2b nav restructuring: Orders merges Shopify + Direct (see
-// OrdersHub), Stock hosts Products/Stock In-Out/Purchase Orders/Suppliers
-// (see StockHub), and More replaces the old footer link row (see More.jsx).
-// Team Board stays a top-level tab — it already degrades gracefully when
-// the Team Board tables don't exist yet (TeamNoticeBoard.jsx shows a
-// friendly empty state, never a spinner or raw error).
+// Stage 2b, revised: Home / Orders / Tracking / Inventory / More. Orders
+// merges Shopify + Direct (see OrdersHub). Tracking is the new combined
+// Shopify+Direct shipment board (see tracking/TrackingBoard.jsx).
+// Inventory hosts Products/Stock In-Out/Scan/Purchase Orders/Low-stock/
+// Movement history/Suppliers (see stock/InventoryHub.jsx). Team Board and
+// Daily Orders/Invoices/Settings move to Home shortcuts + More — purchase
+// orders and suppliers no longer live under a generic "Orders" tab.
 const TABS = [
   { to: '/', label: 'Home', icon: HomeIcon, end: true },
   { to: '/orders', label: 'Orders', icon: ClipboardIcon },
-  { to: '/stock', label: 'Stock', icon: BoxIcon },
-  { to: '/team-board', label: 'Team', icon: BellIcon },
+  { to: '/tracking', label: 'Tracking', icon: PackageCheckIcon },
+  { to: '/inventory', label: 'Inventory', icon: BoxIcon },
   { to: '/more', label: 'More', icon: MoreIcon },
 ]
 

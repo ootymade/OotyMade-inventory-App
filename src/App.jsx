@@ -28,7 +28,9 @@ import ShopifyOrderDetail from './screens/shopify/ShopifyOrderDetail.jsx'
 import ShopifySkuMapping from './screens/shopify/ShopifySkuMapping.jsx'
 import CourierSettings from './screens/settings/CourierSettings.jsx'
 import TeamNoticeBoard from './screens/notices/TeamNoticeBoard.jsx'
-import StockHub from './screens/stock/StockHub.jsx'
+import InventoryHub from './screens/stock/InventoryHub.jsx'
+import MovementHistory from './screens/stock/MovementHistory.jsx'
+import TrackingBoard from './screens/tracking/TrackingBoard.jsx'
 import More from './screens/more/More.jsx'
 import ComponentGallery from './screens/dev/ComponentGallery.jsx'
 import { Spinner } from './components/ui.jsx'
@@ -65,7 +67,9 @@ function AppShell() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/orders" element={<OrdersHub />} />
-            <Route path="/stock" element={<StockHub />} />
+            <Route path="/tracking" element={<TrackingBoard />} />
+            <Route path="/inventory" element={<InventoryHub />} />
+            <Route path="/movements" element={<MovementHistory />} />
             <Route path="/more" element={<More />} />
             <Route path="/products" element={<ProductList />} />
             <Route path="/products/new" element={<ProductForm />} />

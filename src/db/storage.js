@@ -833,13 +833,15 @@ export async function getTodayOrderSummary() {
 // of Home.
 // ---------------------------------------------------------------------------
 export async function getHomeSummary() {
-  const [shopifyR, invoicesR, statsR, todayR, noticeR, poR] = await Promise.allSettled([
+  const [shopifyR, invoicesR, statsR, todayR, noticeR, poR, supplierR, shipmentR] = await Promise.allSettled([
     listShopifyOrders(),
     listInvoices(),
     getDashboardStats(),
     getTodayOrderSummary(),
     listNotices(),
     listPurchaseOrders(),
+    listSuppliers(),
+    listShipments(),
   ])
 
   const shopify = shopifyR.status === 'fulfilled' ? shopifyR.value : []
@@ -851,6 +853,9 @@ export async function getHomeSummary() {
   const todaySummary = todayR.status === 'fulfilled' ? todayR.value : { date: '', total: 0, byChannel: {} }
   const notices = noticeR.status === 'fulfilled' ? noticeR.value : []
   const purchaseOrders = poR.status === 'fulfilled' ? poR.value : []
+  const suppliers = supplierR.status === 'fulfilled' ? supplierR.value : []
+  const shipments = shipmentR.status === 'fulfilled' ? shipmentR.value : []
+  const trackingEntries = buildTrackingEntries(shopify, invoices, shipments)
 
   const now = Date.now()
   const DAY_MS = 24 * 60 * 60 * 1000
@@ -858,9 +863,10 @@ export async function getHomeSummary() {
   const isToday = (iso) => Boolean(iso) && iso.slice(0, 10) === todayStr
   const olderThanADay = (iso) => Boolean(iso) && now - new Date(iso).getTime() > DAY_MS
 
-  const toPack =
-    shopify.filter((o) => ['new', 'packing'].includes(o.workflowStatus)).length +
-    invoices.filter((i) => i.status === 'confirmed').length
+  const shopifyToPack = shopify.filter((o) => ['new', 'packing'].includes(o.workflowStatus)).length
+  const directOpenCount = invoices.filter((i) => ['draft', 'confirmed'].includes(i.status)).length
+
+  const toPack = shopifyToPack + invoices.filter((i) => i.status === 'confirmed').length
 
   const dispatchedToday =
     shopify.filter((o) => o.workflowStatus === 'shipped' && isToday(o.workflowUpdatedAt)).length +
@@ -896,6 +902,12 @@ export async function getHomeSummary() {
     recentActivity: stats.recentActivity.slice(0, 5),
     todayByChannel: todaySummary.byChannel,
     todayTotal: todaySummary.total,
+    // Home tile counts (Stage 2b revision)
+    shopifyToPack,
+    directOpenCount,
+    supplierCount: suppliers.length,
+    trackingNeedsCount: trackingEntries.filter((e) => e.bucket === 'needs_tracking').length,
+    trackingInTransitCount: trackingEntries.filter((e) => e.bucket === 'in_transit').length,
   }
 }
 
@@ -1103,6 +1115,99 @@ export async function getShipment({ shopifyOrderId, invoiceId } = {}) {
   const { data, error } = await query.maybeSingle()
   must(error)
   return data ? rowToShipment(data) : null
+}
+
+// Bulk read for the Tracking Updates board — one query instead of one
+// getShipment() per order. Keeps the shopify_order_id/invoice_id foreign
+// keys alongside the usual rowToShipment fields so callers can join by hand.
+export async function listShipments() {
+  const { data, error } = await supabase.from('shipments').select('*')
+  must(error)
+  return data.map((row) => ({ ...rowToShipment(row), shopifyOrderId: row.shopify_order_id, invoiceId: row.invoice_id }))
+}
+
+// An in-transit parcel with no tracking update for this many days is
+// flagged on the Tracking Updates board. Edit this number directly to
+// change it — there's no settings screen for it.
+export const TRACKING_STALE_DAYS = 5
+
+// Shared by getHomeSummary() (counts only) and getTrackingBoard() (full
+// cards) so the two screens can never disagree about what "needs
+// tracking" or "in transit" means. Shopify's packed/shipped map onto
+// Direct's confirmed/shipped — Direct has no separate "packed" step.
+// Cancelled orders and anything not yet ready to ship are left out
+// entirely; "delivered" is kept only for the last 14 days.
+function buildTrackingEntries(shopify, invoices, shipments) {
+  const byShopify = {}
+  const byInvoice = {}
+  shipments.forEach((s) => {
+    if (s.shopifyOrderId) byShopify[s.shopifyOrderId] = s
+    if (s.invoiceId) byInvoice[s.invoiceId] = s
+  })
+
+  const now = Date.now()
+  const DAY_MS = 24 * 60 * 60 * 1000
+  const DELIVERED_WINDOW_MS = 14 * DAY_MS
+
+  const bucketFor = (statusIsDelivered, hasShipment) =>
+    statusIsDelivered ? 'delivered' : hasShipment ? 'in_transit' : 'needs_tracking'
+
+  const entries = []
+
+  shopify.forEach((o) => {
+    if (o.cancelledAt) return
+    if (!['packed', 'shipped', 'delivered'].includes(o.workflowStatus)) return
+    const shipment = byShopify[o.id] || null
+    const bucket = bucketFor(o.workflowStatus === 'delivered', Boolean(shipment))
+    if (bucket === 'delivered' && now - new Date(o.workflowUpdatedAt).getTime() > DELIVERED_WINDOW_MS) return
+    entries.push({
+      id: o.id,
+      channel: 'shopify',
+      href: `/shopify-orders/${o.id}`,
+      bucket,
+      orderLabel: o.orderNumber,
+      customerName: o.customerName || 'No name',
+      courierName: shipment?.courierName || '',
+      trackingNumber: shipment?.trackingNumber || '',
+      shipmentUpdatedAt: shipment?.updatedAt || null,
+      lastEventAt: o.workflowUpdatedAt || o.createdAt,
+      notSentToShopify: o.workflowStatus === 'shipped',
+    })
+  })
+
+  invoices.forEach((inv) => {
+    if (!['confirmed', 'shipped', 'delivered'].includes(inv.status)) return
+    const shipment = byInvoice[inv.id] || null
+    const bucket = bucketFor(inv.status === 'delivered', Boolean(shipment))
+    if (bucket === 'delivered' && now - new Date(inv.updatedAt).getTime() > DELIVERED_WINDOW_MS) return
+    entries.push({
+      id: inv.id,
+      channel: 'direct',
+      href: `/direct-orders/${inv.id}`,
+      bucket,
+      orderLabel: inv.kind === 'gst' ? `INV-${inv.invoiceNumber}` : 'Proforma',
+      customerName: inv.customerName || 'No name',
+      courierName: shipment?.courierName || '',
+      trackingNumber: shipment?.trackingNumber || '',
+      shipmentUpdatedAt: shipment?.updatedAt || null,
+      lastEventAt: inv.updatedAt,
+      notSentToShopify: false,
+    })
+  })
+
+  return entries
+}
+
+export async function getTrackingBoard() {
+  const [shopifyR, invoicesR, shipmentsR] = await Promise.allSettled([
+    listShopifyOrders(),
+    listInvoices(),
+    listShipments(),
+  ])
+  const shopify = shopifyR.status === 'fulfilled' ? shopifyR.value : []
+  const invoices = invoicesR.status === 'fulfilled' ? invoicesR.value : []
+  const shipments = shipmentsR.status === 'fulfilled' ? shipmentsR.value : []
+  return buildTrackingEntries(shopify, invoices, shipments)
 }
 
 // Any signed-in team member — staff set this themselves on dispatch.

@@ -10,11 +10,14 @@ import {
   ChevronRightIcon,
 } from '../../components/icons.jsx'
 
-// Stage 2b: replaces the old row of tiny footer links on the Dashboard
-// with a proper screen of large, grouped rows. Every destination here
-// already existed — this only changes how they're found. Role-aware rows
-// (SKU mapping, courier settings, the temporary component gallery) are
-// hidden outright for non-admins rather than shown then blocked.
+// Stage 2b, revised: replaces the old row of tiny footer links with a
+// proper screen of large, grouped rows. Every destination here already
+// existed — this only changes how they're found. Role-aware rows (SKU
+// mapping, courier settings, export/import, the temporary component
+// gallery) are hidden outright for non-admins rather than shown then
+// blocked. No standalone "Inventory" group here — every inventory
+// destination already has its own bottom-nav tab (see InventoryHub),
+// so a second copy of the same links would just be noise.
 function Row({ to, icon: Icon, title, subtitle, tag }) {
   return (
     <Link to={to} className="flex items-center gap-3 px-4 py-4">
@@ -47,10 +50,7 @@ export default function More() {
 
       <Group title="Sales">
         <Row to="/daily-orders" icon={ReceiptIcon} title="Daily orders" subtitle="Order counts by channel" />
-      </Group>
-
-      <Group title="Inventory">
-        <Row to="/data-sync" icon={SyncIcon} title="Export / import data" subtitle="Backup or bulk-add products" />
+        <Row to="/direct-orders" icon={ReceiptIcon} title="Invoices" subtitle="All direct orders / GST invoices" />
       </Group>
 
       <Group title="Team">
@@ -62,6 +62,7 @@ export default function More() {
         <Group title="Admin">
           <Row to="/courier-settings" icon={TruckIcon} title="Courier settings" />
           <Row to="/shopify-sku-mapping" icon={EditIcon} title="Shopify SKU mapping" />
+          <Row to="/data-sync" icon={SyncIcon} title="Export / import data" subtitle="Backup or bulk-add products" />
           <Row to="/component-gallery" icon={BoxIcon} title="Component gallery" tag="Temp" />
         </Group>
       </AdminOnly>

@@ -2,7 +2,7 @@ import { useRef, useState } from 'react'
 import { exportAll, bulkImportProducts } from '../../db/storage.js'
 import { useTeamMember } from '../../context/TeamMemberContext.jsx'
 import { useToast } from '../../context/ToastContext.jsx'
-import { PageHeader, Card, Button, Spinner } from '../../components/ui.jsx'
+import { PageHeader, Card, Button, Spinner, AdminOnly, EmptyState } from '../../components/ui.jsx'
 import { DownloadIcon, UploadIcon } from '../../components/icons.jsx'
 
 export default function DataSync() {
@@ -55,6 +55,7 @@ export default function DataSync() {
     <div>
       <PageHeader title="Export & bulk import" back />
 
+      <AdminOnly fallback={<EmptyState title="Admins only" subtitle="Ask an admin for a data export or bulk import" />}>
       <div className="space-y-4 px-4 py-4">
         <Card className="space-y-3">
           <div>
@@ -86,6 +87,7 @@ export default function DataSync() {
           <input ref={fileInput} type="file" accept="application/json" className="hidden" onChange={onFileChosen} />
         </Card>
       </div>
+      </AdminOnly>
     </div>
   )
 }

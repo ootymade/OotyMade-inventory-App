@@ -5,18 +5,19 @@ import { useRealtimeRefresh } from '../db/useRealtimeRefresh.js'
 import { useTeamMember } from '../context/TeamMemberContext.jsx'
 import { Card, Button, EmptyState, AdminOnly, Skeleton, Badge } from '../components/ui.jsx'
 import {
-  AlertIcon,
   ScanIcon,
   PlusIcon,
   ReceiptIcon,
   BoxIcon,
-  SyncIcon,
   BellIcon,
   PinIcon,
   ChevronRightIcon,
+  ShoppingBagIcon,
+  TruckIcon,
+  PackageCheckIcon,
 } from '../components/icons.jsx'
 
-const REALTIME_TABLES = ['products', 'movements', 'purchase_orders', 'invoices', 'shopify_orders', 'team_notices']
+const REALTIME_TABLES = ['products', 'movements', 'purchase_orders', 'invoices', 'shopify_orders', 'team_notices', 'shipments']
 
 function formatMoney(n) {
   return new Intl.NumberFormat(undefined, { style: 'currency', currency: 'INR', maximumFractionDigits: 0 }).format(n || 0)
@@ -35,6 +36,18 @@ function timeAgo(iso) {
 }
 
 const REASON_LABEL = { received: 'Received', sold: 'Sold', damaged: 'Damaged', adjustment: 'Adjusted' }
+
+function Tile({ to, icon: Icon, label, value }) {
+  return (
+    <Link to={to} className="flex flex-col items-start gap-2 rounded-[var(--radius-lg)] bg-white p-4 shadow-[0_2px_8px_rgba(28,25,23,0.07)]">
+      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-brand-50 text-brand-700">
+        <Icon className="h-5 w-5" />
+      </div>
+      <p className="text-2xl font-bold text-slate-900">{value}</p>
+      <p className="text-xs font-semibold text-slate-500">{label}</p>
+    </Link>
+  )
+}
 
 export default function Dashboard() {
   const { member, clearMember } = useTeamMember()
@@ -59,15 +72,23 @@ export default function Dashboard() {
   if (!summary) {
     return (
       <div className="p-4">
-        <Skeleton className="h-28" />
-        <div className="mt-4 grid grid-cols-2 gap-3">
-          {[0, 1, 2, 3].map((i) => (
-            <Skeleton key={i} className="h-20" />
+        <Skeleton className="h-10 w-40" />
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {[0, 1, 2, 3, 4].map((i) => (
+            <Skeleton key={i} className="h-24" />
           ))}
         </div>
       </div>
     )
   }
+
+  const tiles = [
+    { to: '/orders?channel=shopify', icon: ShoppingBagIcon, label: 'Shopify Orders · to pack', value: summary.shopifyToPack },
+    { to: '/orders?channel=direct', icon: ReceiptIcon, label: 'Direct Orders · open', value: summary.directOpenCount },
+    { to: '/tracking', icon: PackageCheckIcon, label: 'Tracking Updates', value: summary.trackingNeedsCount + summary.trackingInTransitCount },
+    { to: '/suppliers', icon: TruckIcon, label: 'Suppliers', value: summary.supplierCount },
+    { to: '/inventory', icon: BoxIcon, label: 'Inventory · low stock', value: summary.lowStockCount },
+  ]
 
   const workCards = [
     { label: 'To pack', value: summary.toPack, tone: summary.toPack > 0 ? 'warn' : 'slate' },
@@ -99,13 +120,6 @@ export default function Dashboard() {
                 </span>
               )}
             </Link>
-            <Link
-              to="/data-sync"
-              className="tap flex h-10 w-10 items-center justify-center rounded-full bg-white/10"
-              aria-label="Export data / bulk import products"
-            >
-              <SyncIcon className="h-5 w-5" />
-            </Link>
             <button
               onClick={() => {
                 if (confirm('Switch user on this phone?')) clearMember()
@@ -117,22 +131,18 @@ export default function Dashboard() {
             </button>
           </div>
         </div>
+      </div>
 
-        {summary.lowStockCount > 0 && (
-          <Link
-            to="/products?filter=low-stock"
-            className="mt-4 flex items-center gap-2 rounded-xl bg-warn-500/20 px-3.5 py-3 text-sm font-medium text-warn-500"
-          >
-            <AlertIcon className="h-5 w-5 shrink-0" />
-            <span className="text-white">
-              {summary.lowStockCount} item{summary.lowStockCount === 1 ? '' : 's'} low on stock
-            </span>
-          </Link>
-        )}
+      <div className="-mt-4 px-4">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+          {tiles.map((t) => (
+            <Tile key={t.to} {...t} />
+          ))}
+        </div>
       </div>
 
       {summary.pinnedNotice && (
-        <div className="-mt-4 px-4">
+        <div className="mt-4 px-4">
           <Link to="/team-board">
             <Card className="!p-3.5 flex items-start gap-2.5 ring-1 ring-brand-100">
               <PinIcon className="mt-0.5 h-4 w-4 shrink-0 text-brand-600" />
@@ -143,7 +153,7 @@ export default function Dashboard() {
         </div>
       )}
 
-      <div className={`${summary.pinnedNotice ? 'mt-4' : '-mt-4'} px-4`}>
+      <div className="mt-5 px-4">
         <p className="mb-2 text-sm font-semibold text-slate-500">Today&apos;s work</p>
         <div className="grid grid-cols-2 gap-3">
           {workCards.map((c) => (
@@ -179,22 +189,30 @@ export default function Dashboard() {
 
       <div className="mt-5 px-4">
         <p className="mb-2 text-sm font-semibold text-slate-500">Quick actions</p>
-        <div className="grid grid-cols-3 gap-3">
-          <Button variant="secondary" className="!flex-col !gap-1.5 !py-4" onClick={() => navigate('/scan')}>
+        <div className="grid grid-cols-4 gap-3">
+          <Button variant="secondary" className="!flex-col !gap-1.5 !py-4 !px-1" onClick={() => navigate('/scan')}>
             <ScanIcon className="h-6 w-6" />
             <span className="text-xs">Scan</span>
           </Button>
-          <Button variant="secondary" className="!flex-col !gap-1.5 !py-4" onClick={() => navigate('/stock-move')}>
+          <Button variant="secondary" className="!flex-col !gap-1.5 !py-4 !px-1" onClick={() => navigate('/stock-move')}>
             <PlusIcon className="h-6 w-6" />
             <span className="text-xs">Add stock</span>
           </Button>
           <Button
             variant="secondary"
-            className="!flex-col !gap-1.5 !py-4"
+            className="!flex-col !gap-1.5 !py-4 !px-1"
             onClick={() => navigate('/direct-orders/new')}
           >
             <ReceiptIcon className="h-6 w-6" />
             <span className="text-xs">New order</span>
+          </Button>
+          <Button
+            variant="secondary"
+            className="!flex-col !gap-1.5 !py-4 !px-1"
+            onClick={() => navigate('/direct-orders/new')}
+          >
+            <ReceiptIcon className="h-6 w-6" />
+            <span className="text-xs">New invoice</span>
           </Button>
         </div>
       </div>
@@ -224,7 +242,7 @@ export default function Dashboard() {
       <div className="mt-5 px-4">
         <div className="mb-2 flex items-center justify-between">
           <p className="text-sm font-semibold text-slate-500">Recent activity</p>
-          <Link to="/products" className="text-xs font-semibold text-brand-600">
+          <Link to="/movements" className="text-xs font-semibold text-brand-600">
             View all
           </Link>
         </div>
@@ -273,6 +291,16 @@ export default function Dashboard() {
           </Card>
         </div>
       )}
+
+      <div className="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 px-4 text-xs text-slate-400">
+        <Link to="/daily-orders">Daily orders</Link>
+        <span>·</span>
+        <Link to="/team-board">Team board</Link>
+        <span>·</span>
+        <Link to="/direct-orders">Invoices</Link>
+        <span>·</span>
+        <Link to="/more">Settings</Link>
+      </div>
     </div>
   )
 }
