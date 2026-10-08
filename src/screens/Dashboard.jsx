@@ -189,7 +189,7 @@ export default function Dashboard() {
 
       <div className="mt-5 px-4">
         <p className="mb-2 text-sm font-semibold text-slate-500">Quick actions</p>
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-3 gap-3">
           <Button variant="secondary" className="!flex-col !gap-1.5 !py-4 !px-1" onClick={() => navigate('/scan')}>
             <ScanIcon className="h-6 w-6" />
             <span className="text-xs">Scan</span>
@@ -204,15 +204,7 @@ export default function Dashboard() {
             onClick={() => navigate('/direct-orders/new')}
           >
             <ReceiptIcon className="h-6 w-6" />
-            <span className="text-xs">New order</span>
-          </Button>
-          <Button
-            variant="secondary"
-            className="!flex-col !gap-1.5 !py-4 !px-1"
-            onClick={() => navigate('/direct-orders/new')}
-          >
-            <ReceiptIcon className="h-6 w-6" />
-            <span className="text-xs">New invoice</span>
+            <span className="text-xs">New direct order</span>
           </Button>
         </div>
       </div>

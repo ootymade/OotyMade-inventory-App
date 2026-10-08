@@ -1126,17 +1126,27 @@ export async function listShipments() {
   return data.map((row) => ({ ...rowToShipment(row), shopifyOrderId: row.shopify_order_id, invoiceId: row.invoice_id }))
 }
 
-// An in-transit parcel with no tracking update for this many days is
-// flagged on the Tracking Updates board. Edit this number directly to
-// change it — there's no settings screen for it.
+// An in-transit parcel dispatched this many days ago with no "delivered"
+// update yet is flagged on the Tracking Updates board, worded as a
+// prompt to go check status manually — there's no live courier polling
+// behind it. Edit this number directly to change it — there's no
+// settings screen for it.
 export const TRACKING_STALE_DAYS = 5
 
 // Shared by getHomeSummary() (counts only) and getTrackingBoard() (full
 // cards) so the two screens can never disagree about what "needs
-// tracking" or "in transit" means. Shopify's packed/shipped map onto
-// Direct's confirmed/shipped — Direct has no separate "packed" step.
-// Cancelled orders and anything not yet ready to ship are left out
-// entirely; "delivered" is kept only for the last 14 days.
+// tracking", "in transit" or "fulfilled without tracking" means.
+// Shopify's packed/shipped map onto Direct's confirmed/shipped — Direct
+// has no separate "packed" step. Cancelled orders and anything not yet
+// ready to ship are left out entirely; "delivered" is kept only for the
+// last 14 days. A Shopify order Shopify itself already shows as
+// fulfilled (fulfillment_status === 'FULFILLED') but that was never
+// walked through our packing workflow — typically a historical order
+// backfilled before this feature existed — lands in its own
+// "fulfilled_no_tracking" bucket instead of Needs tracking, so old,
+// nothing-to-do-about-it orders don't bury the ones actually waiting
+// on a courier today. Direct orders have no equivalent external
+// fulfillment signal, so this bucket is Shopify-only.
 function buildTrackingEntries(shopify, invoices, shipments) {
   const byShopify = {}
   const byInvoice = {}
@@ -1156,9 +1166,25 @@ function buildTrackingEntries(shopify, invoices, shipments) {
 
   shopify.forEach((o) => {
     if (o.cancelledAt) return
-    if (!['packed', 'shipped', 'delivered'].includes(o.workflowStatus)) return
+    // Shopify's own fulfillment_status (not our internal workflow_status)
+    // is what tells apart a backfilled/historical order Shopify already
+    // shows as fulfilled — these were never walked through our packing
+    // workflow, so workflow_status can still read "new", but there's
+    // nothing left to "pack" and nothing urgent about them lacking a
+    // tracking number. They get their own bucket instead of mixing into
+    // Needs tracking, which is reserved for orders we are actively
+    // dispatching right now.
+    const alreadyFulfilledInShopify = o.fulfillmentStatus === 'FULFILLED'
+    const inOurWorkflow = ['packed', 'shipped', 'delivered'].includes(o.workflowStatus)
+    if (!inOurWorkflow && !alreadyFulfilledInShopify) return
+
     const shipment = byShopify[o.id] || null
-    const bucket = bucketFor(o.workflowStatus === 'delivered', Boolean(shipment))
+    let bucket
+    if (o.workflowStatus === 'delivered') bucket = 'delivered'
+    else if (shipment) bucket = 'in_transit'
+    else if (alreadyFulfilledInShopify) bucket = 'fulfilled_no_tracking'
+    else bucket = 'needs_tracking'
+
     if (bucket === 'delivered' && now - new Date(o.workflowUpdatedAt).getTime() > DELIVERED_WINDOW_MS) return
     entries.push({
       id: o.id,

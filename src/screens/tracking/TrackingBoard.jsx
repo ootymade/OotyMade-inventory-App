@@ -22,6 +22,7 @@ const DAY_MS = 24 * 60 * 60 * 1000
 const TABS = [
   { value: 'needs_tracking', label: 'Needs tracking' },
   { value: 'in_transit', label: 'In transit' },
+  { value: 'fulfilled_no_tracking', label: 'Fulfilled, no tracking' },
   { value: 'delivered', label: 'Delivered' },
 ]
 
@@ -153,6 +154,7 @@ export default function TrackingBoard() {
   const counts = {
     needs_tracking: entries.filter((e) => e.bucket === 'needs_tracking').length,
     in_transit: entries.filter((e) => e.bucket === 'in_transit').length,
+    fulfilled_no_tracking: entries.filter((e) => e.bucket === 'fulfilled_no_tracking').length,
     delivered: entries.filter((e) => e.bucket === 'delivered').length,
   }
 
@@ -180,7 +182,15 @@ export default function TrackingBoard() {
         {shown.length === 0 ? (
           <EmptyState
             icon={<TruckIcon className="h-10 w-10" />}
-            title={tab === 'needs_tracking' ? 'Nothing waiting on tracking' : tab === 'in_transit' ? 'Nothing in transit' : 'Nothing delivered recently'}
+            title={
+              tab === 'needs_tracking'
+                ? 'Nothing waiting on tracking'
+                : tab === 'in_transit'
+                  ? 'Nothing in transit'
+                  : tab === 'fulfilled_no_tracking'
+                    ? 'Nothing fulfilled without tracking'
+                    : 'Nothing delivered recently'
+            }
           />
         ) : (
           shown.map((entry) => {
@@ -188,7 +198,8 @@ export default function TrackingBoard() {
             const editing = editingKey === key
             const verified = hasVerifiedLink(entry.courierName, couriers)
             const trackingUrl = verified ? buildTrackingUrl(entry.courierName, entry.trackingNumber, couriers) : null
-            const stale = entry.bucket === 'in_transit' && daysAgo(entry.shipmentUpdatedAt) > TRACKING_STALE_DAYS
+            const dispatchedDaysAgo = daysAgo(entry.lastEventAt)
+            const stale = entry.bucket === 'in_transit' && dispatchedDaysAgo > TRACKING_STALE_DAYS
 
             return (
               <Card key={key} className="space-y-2.5">
@@ -210,7 +221,7 @@ export default function TrackingBoard() {
 
                 {stale && (
                   <p className="flex items-center gap-1.5 text-xs font-semibold text-warn-600">
-                    <AlertIcon className="h-4 w-4" /> No update in {daysAgo(entry.shipmentUpdatedAt)} days
+                    <AlertIcon className="h-4 w-4" /> Dispatched {dispatchedDaysAgo} days ago, check status
                   </p>
                 )}
 
